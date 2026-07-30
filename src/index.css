@@ -213,6 +213,95 @@ select {
   outline-offset: 2px;
 }
 
+.photo-avatar-clickable {
+  cursor: zoom-in;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.photo-avatar-clickable:hover {
+  transform: scale(1.04);
+  box-shadow: 0 10px 24px -12px rgba(13, 21, 38, 0.7);
+}
+
+.photo-lightbox-stage {
+  display: grid;
+  min-height: min(70vh, 720px);
+  place-items: center;
+  padding: 12px;
+  border-radius: 18px;
+  background: #0d1526;
+}
+
+.photo-lightbox-stage img {
+  width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+}
+
+.student-filter-panel {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.student-directory-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.student-directory-card {
+  display: flex;
+  min-width: 0;
+  min-height: 168px;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.3s ease;
+}
+
+.student-directory-card:hover {
+  transform: translateY(-4px);
+  border-color: #ffc9aa;
+  box-shadow: 0 18px 34px -22px rgba(16, 27, 51, 0.55) !important;
+}
+
+.student-directory-name {
+  width: 100%;
+  min-height: 36px;
+}
+
+.student-fab {
+  position: fixed;
+  z-index: 320;
+  right: 22px;
+  bottom: 24px;
+  box-shadow: 0 14px 30px -10px rgba(242, 101, 34, 0.75);
+}
+
+.profile-photo-editor {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.profile-camera-button {
+  position: absolute;
+  right: -2px;
+  bottom: 0;
+  border: 3px solid white;
+  box-shadow: 0 6px 14px -7px rgba(13, 21, 38, 0.75);
+}
+
+.student-enrollment-row {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.student-enrollment-row.selected {
+  background: #fff4ed;
+  border-color: #ffb58d !important;
+}
+
 .stat-value {
   margin: 5px 0 3px;
   font-size: clamp(1.7rem, 3vw, 2.15rem);
@@ -490,6 +579,59 @@ select {
   margin-top: 18px;
 }
 
+.report-student-summary {
+  max-width: 820px;
+}
+
+.report-total {
+  color: #22c55e;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.report-class-dot {
+  display: inline-block;
+  width: 9px;
+  min-width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.report-grid-card {
+  overflow: hidden;
+}
+
+.attendance-grid-table {
+  font-size: 0.78rem;
+}
+
+.attendance-grid-table th {
+  color: #16233f;
+  background: #eef1f6;
+}
+
+.attendance-grid-table td,
+.attendance-grid-table th {
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.report-sticky-name {
+  position: sticky;
+  z-index: 2;
+  left: 0;
+  min-width: 180px;
+  background: white;
+  box-shadow: 4px 0 8px -8px rgba(13, 21, 38, 0.6);
+}
+
+.attendance-grid-table thead .report-sticky-name {
+  z-index: 3;
+  background: #eef1f6;
+}
+
 .mobile-nav {
   position: fixed;
   z-index: 300;
@@ -708,6 +850,27 @@ select {
     flex: 1 1 180px;
   }
 
+  .student-directory-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .student-directory-card {
+    min-height: 154px;
+    padding: 10px !important;
+  }
+
+  .student-directory-card .mantine-Avatar-root {
+    width: 62px;
+    min-width: 62px;
+    height: 62px;
+  }
+
+  .student-fab {
+    right: 18px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
   .dashboard-stats .stat-card {
     min-height: 126px;
     padding: 14px !important;
@@ -863,6 +1026,10 @@ select {
 }
 
 @media (max-width: 30em) {
+  .student-directory-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .mobile-brand-name {
     display: none;
   }
@@ -874,6 +1041,10 @@ select {
 }
 
 @media (max-width: 22.5em) {
+  .student-directory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-main {
     padding-right: 8px;
     padding-left: 8px;

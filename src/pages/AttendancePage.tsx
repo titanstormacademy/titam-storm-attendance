@@ -7,7 +7,7 @@ import { IconArrowLeft, IconCheck, IconChevronRight, IconSearch, IconTrash, Icon
 import { addCoachAttendance, ensureTodaySession, getAttendance, getCoachAttendance, removeAttendance, removeCoachAttendance, saveAttendance, saveStudent } from '../lib/api'
 import { getClassSessions } from '../lib/sessionOperations'
 import { publicImageUrl } from '../lib/supabase'
-import { EmptyState, PageHeader, PersonAvatar } from '../components/ui'
+import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
 import type { AcademyClass, Attendance, BootstrapData, CoachAttendance, Session, Student } from '../types/models'
 
 export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchId: number; data: BootstrapData; isAdmin: boolean; onChanged: () => Promise<unknown> }) {
@@ -26,6 +26,7 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
   const [quickName, setQuickName] = useState('')
   const [quickPhone, setQuickPhone] = useState('')
   const [coachId, setCoachId] = useState<string | null>(null)
+  const [photoView, setPhotoView] = useState<{ src: string | null; name: string } | null>(null)
 
   const todayName = dayjs().format('dddd')
   const todayClasses = data.classes.filter((item) => item.day_of_week === todayName)
@@ -233,16 +234,17 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
 
         <Box>
           <Text className="attendance-section-label">Enrolled students</Text>
-          {groupedStudents.length ? groupedStudents.map(([group, students]) => <Box key={group} mb="lg"><Group gap="xs" mb="xs"><Text className="attendance-level-label">{group}</Text><Badge size="sm" color="gray" variant="light">{students.length}</Badge></Group><Stack gap="xs">{students.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={records.find((record) => record.student_id === student.id)?.remarks || ''} onToggle={() => toggle(student)} onRemark={(value) => updateRemark(student, value)} />)}</Stack></Box>) : <Text c="dimmed" py="md">No students match this filter.</Text>}
+          {groupedStudents.length ? groupedStudents.map(([group, students]) => <Box key={group} mb="lg"><Group gap="xs" mb="xs"><Text className="attendance-level-label">{group}</Text><Badge size="sm" color="gray" variant="light">{students.length}</Badge></Group><Stack gap="xs">{students.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={records.find((record) => record.student_id === student.id)?.remarks || ''} onToggle={() => toggle(student)} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} />)}</Stack></Box>) : <Text c="dimmed" py="md">No students match this filter.</Text>}
         </Box>
 
         <Box>
           <Group justify="space-between" mb="xs"><Text className="attendance-section-label" mb={0}>Walk-ins</Text><Button size="xs" leftSection={<IconUserPlus size={15} />} onClick={walkinModal.open}>Add walk-in</Button></Group>
-          {walkins.length ? <Stack gap="xs">{walkins.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={records.find((record) => record.student_id === student.id)?.remarks || ''} onToggle={() => toggle(student)} onRemark={(value) => updateRemark(student, value)} onDelete={() => deleteWalkin(student.id)} />)}</Stack> : <Text size="sm" c="dimmed">No walk-ins recorded.</Text>}
+          {walkins.length ? <Stack gap="xs">{walkins.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={records.find((record) => record.student_id === student.id)?.remarks || ''} onToggle={() => toggle(student)} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} onDelete={() => deleteWalkin(student.id)} />)}</Stack> : <Text size="sm" c="dimmed">No walk-ins recorded.</Text>}
         </Box>
       </Stack> : <EmptyState title="No sessions recorded" message="Create or generate a session from Classes, then return here." icon={IconUsers} />}
 
       <Modal opened={walkinOpened} onClose={walkinModal.close} title="Add walk-in" centered><Stack><Select label="Existing student" placeholder="Search student" searchable value={walkinId} onChange={setWalkinId} data={possibleWalkins.map((student) => ({ value: String(student.id), label: `${student.name} · ${student.status}` }))} /><Button onClick={addWalkin} disabled={!walkinId} loading={loading}>Mark selected student present</Button><Divider label="or register a trial student" /><TextInput label="Student name" value={quickName} onChange={(event) => setQuickName(event.currentTarget.value)} /><TextInput label="Phone" value={quickPhone} onChange={(event) => setQuickPhone(event.currentTarget.value)} /><Button variant="light" onClick={addWalkin} disabled={!quickName.trim()} loading={loading}>Register and mark present</Button></Stack></Modal>
+      <PhotoLightbox src={photoView?.src || null} name={photoView?.name || 'Student photo'} opened={Boolean(photoView)} onClose={() => setPhotoView(null)} />
     </>
   )
 }
@@ -260,8 +262,8 @@ function AttendanceClassCard({ item, enrolled, action, onClick }: { item: Academ
   return <Paper component="button" type="button" className="attendance-class-card" p="md" radius="lg" withBorder onClick={onClick}><Box><Text fw={800}>{item.label}</Text><Text c="dimmed" size="sm" mt={3}>{item.day_of_week} · {formatTime(item.start_time)} – {formatTime(item.end_time)}</Text></Box><Box ta="right"><Text className="attendance-card-action">{action} <IconChevronRight size={14} /></Text><Text c="dimmed" size="xs">{enrolled} enrolled</Text></Box></Paper>
 }
 
-function AttendanceStudentCard({ student, present, remarks, onToggle, onRemark, onDelete }: { student: Student; present: boolean; remarks: string; onToggle: () => void; onRemark: (value: string) => void; onDelete?: () => void }) {
-  return <Paper className={`attendance-student-card ${present ? 'present' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Text size="xs" c="dimmed">{student.status}</Text></Box><Button className="attendance-present-button" color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} onClick={onToggle}>{present ? 'Present' : 'Present'}</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group><TextInput key={`${student.id}-${remarks}`} defaultValue={remarks} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
+function AttendanceStudentCard({ student, present, remarks, onToggle, onRemark, onPhoto, onDelete }: { student: Student; present: boolean; remarks: string; onToggle: () => void; onRemark: (value: string) => void; onPhoto: () => void; onDelete?: () => void }) {
+  return <Paper className={`attendance-student-card ${present ? 'present' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} onClick={onPhoto} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Text size="xs" c="dimmed">{student.status}</Text></Box><Button className="attendance-present-button" color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} onClick={onToggle}>{present ? 'Present' : 'Present'}</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group><TextInput key={`${student.id}-${remarks}`} defaultValue={remarks} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
 }
 
 function nearestSession(items: Session[]) {

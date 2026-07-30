@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Alert, Badge, Box, Button, Checkbox, FileInput, Grid, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Textarea, ThemeIcon } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Box, Button, Checkbox, FileButton, Grid, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput, Textarea, ThemeIcon } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconAlertTriangle, IconCash, IconClock, IconEdit, IconMessageCircle, IconPlus, IconReceiptRefund, IconTrash, IconUserStar } from '@tabler/icons-react'
+import { IconAlertTriangle, IconCamera, IconCash, IconClock, IconEdit, IconMessageCircle, IconPlus, IconReceiptRefund, IconTrash, IconUserStar } from '@tabler/icons-react'
 import { deleteCoach, getCoachPayments, getCommission, recordCoachPayout, saveCoach, undoCoachPayout, uploadImage } from '../lib/api'
-import { EmptyState, PageHeader, PersonAvatar } from '../components/ui'
+import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
 import { publicImageUrl } from '../lib/supabase'
 import type { BootstrapData, Coach, CoachPayment, CommissionSummary } from '../types/models'
 
@@ -16,6 +16,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
   const [payoutOpened, payoutModal] = useDisclosure(false)
   const [form, setForm] = useState(blankCoach)
   const [photo, setPhoto] = useState<File | null>(null)
+  const [photoView, setPhotoView] = useState<{ src: string | null; name: string } | null>(null)
   const [coach, setCoach] = useState<Coach | null>(null)
   const [commission, setCommission] = useState<CommissionSummary | null>(null)
   const [history, setHistory] = useState<CoachPayment[]>([])
@@ -139,7 +140,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
       {data.coaches.length ? <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }}>
         {data.coaches.map((item) => <Paper key={item.id} p="lg" radius="lg" withBorder>
           <Group align="flex-start" wrap="nowrap">
-            <PersonAvatar name={item.name} src={publicImageUrl('coach-photos', item.photo_path)} size={58} />
+            <PersonAvatar name={item.name} src={publicImageUrl('coach-photos', item.photo_path)} size={58} onClick={() => setPhotoView({ src: publicImageUrl('coach-photos', item.photo_path), name: item.name })} />
             <Stack gap={5} flex={1} style={{ minWidth: 0 }}><Group justify="space-between" wrap="nowrap"><Text fw={800} truncate>{item.name}</Text><Group gap={2} wrap="nowrap"><ActionIcon aria-label={`Edit ${item.name}`} size={44} variant="subtle" color="gray" onClick={() => edit(item)}><IconEdit size={17} /></ActionIcon><ActionIcon aria-label={`Delete ${item.name}`} size={44} variant="subtle" color="red" onClick={() => remove(item)}><IconTrash size={17} /></ActionIcon></Group></Group><Group gap={6}><Badge variant="light" color={item.coach_type === 'Head' ? 'orange' : 'blue'}>{item.coach_type}</Badge><Badge variant="outline" color={item.status === 'Active' ? 'green' : 'gray'}>{item.status}</Badge></Group><Group gap="xs"><Text c="dimmed" size="sm">{item.phone || 'No phone'}{item.coach_type === 'Assistant' ? ` · RM ${money(item.hourly_rate)}/h` : ''}</Text>{item.phone && <ActionIcon component="a" href={waUrl(item.phone)} target="_blank" aria-label={`WhatsApp ${item.name}`} variant="light" color="green" size={36}><IconMessageCircle size={17} /></ActionIcon>}</Group></Stack>
           </Group>
           <Button mt="lg" fullWidth variant="light" leftSection={<IconCash size={17} />} onClick={() => openPayout(item)}>View payout</Button>
@@ -148,11 +149,12 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
 
       <Modal opened={formOpened} onClose={formModal.close} title={form.id ? `Edit ${form.name}` : 'Add coach'} centered>
         <Stack>
+          <Group justify="center"><Box className="profile-photo-editor"><PersonAvatar name={form.name || 'New coach'} src={publicImageUrl('coach-photos', form.photo_path || null)} size={92} onClick={() => setPhotoView({ src: publicImageUrl('coach-photos', form.photo_path || null), name: form.name || 'Coach photo' })} /><FileButton onChange={setPhoto} accept="image/png,image/jpeg,image/webp">{(props) => <ActionIcon {...props} className="profile-camera-button" aria-label="Choose coach photo" color="orange" size={32} radius="xl"><IconCamera size={16} /></ActionIcon>}</FileButton></Box></Group>
+          {photo && <Text size="xs" c="orange" ta="center">New photo selected · save to upload</Text>}
           <TextInput label="Name" value={form.name} onChange={(event) => setForm({ ...form, name: event.currentTarget.value })} required />
           <TextInput label="Phone" value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.currentTarget.value })} />
           <Grid><Grid.Col span={{ base: 12, xs: 6 }}><Select label="Type" value={form.coach_type} onChange={(value) => setForm({ ...form, coach_type: value as Coach['coach_type'] })} data={[{ value: 'Head', label: 'Head coach' }, { value: 'Assistant', label: 'Assistant coach' }]} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6 }}><Select label="Status" value={form.status} onChange={(value) => setForm({ ...form, status: value as Coach['status'] })} data={['Active', 'Inactive']} /></Grid.Col></Grid>
           {form.coach_type === 'Assistant' && <NumberInput label="Hourly rate (RM)" value={form.hourly_rate || 0} onChange={(value) => setForm({ ...form, hourly_rate: Number(value) })} min={0} decimalScale={2} />}
-          <FileInput label="Coach photo" accept="image/png,image/jpeg,image/webp" value={photo} onChange={setPhoto} />
           <Group justify="flex-end"><Button variant="default" onClick={formModal.close}>Cancel</Button><Button onClick={save} loading={loading}>Save coach</Button></Group>
         </Stack>
       </Modal>
@@ -184,6 +186,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
           </Paper>
         </Stack>
       </Modal>
+      <PhotoLightbox src={photoView?.src || null} name={photoView?.name || 'Coach photo'} opened={Boolean(photoView)} onClose={() => setPhotoView(null)} />
     </>
   )
 }

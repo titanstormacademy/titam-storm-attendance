@@ -1,4 +1,4 @@
-import { Avatar, Box, Group, Modal, Paper, Skeleton, Stack, Text, ThemeIcon, Title, type ModalProps } from '@mantine/core'
+import { Avatar, Box, Group, Image, Modal, Paper, Skeleton, Stack, Text, ThemeIcon, Title, type ModalProps } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import type { Icon } from '@tabler/icons-react'
 
@@ -59,8 +59,12 @@ export function EmptyState({ title, message, icon: EmptyIcon }: { title: string;
   )
 }
 
-export function PersonAvatar({ name, src, size = 'md' }: { name: string; src?: string | null; size?: string | number }) {
-  return <Avatar src={src} name={name} color="orange" radius="xl" size={size} />
+export function PersonAvatar({ name, src, size = 'md', onClick }: { name: string; src?: string | null; size?: string | number; onClick?: () => void }) {
+  return <Avatar className={onClick ? 'photo-avatar-clickable' : undefined} src={src} name={name} color="orange" radius="xl" size={size} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') onClick() } : undefined} />
+}
+
+export function PhotoLightbox({ src, name, opened, onClose }: { src: string | null; name: string; opened: boolean; onClose: () => void }) {
+  return <Modal className="photo-lightbox" opened={opened} onClose={onClose} title={name} size="xl" centered overlayProps={{ backgroundOpacity: 0.82, blur: 5 }}><Box className="photo-lightbox-stage">{src ? <Image src={src} alt={name} fit="contain" /> : <Avatar name={name} color="orange" size={180} radius="xl" />}</Box></Modal>
 }
 
 export function PageLoader() {
