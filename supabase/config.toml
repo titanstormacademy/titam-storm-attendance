@@ -1,0 +1,4 @@
+project_id = "titan-storm-web"
+
+[functions.receipt-ocr]
+verify_jwt = true

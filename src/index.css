@@ -1,0 +1,293 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color: #172033;
+  background: #f6f7f9;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at 90% -10%, rgba(245, 138, 35, 0.08), transparent 30%),
+    #f6f7f9;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.app-header {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e8ebef;
+  backdrop-filter: blur(14px);
+}
+
+.app-navbar {
+  background: #101828;
+  border: 0;
+  color: white;
+}
+
+.app-navbar .mantine-Text-root {
+  color: inherit;
+}
+
+.app-navbar .nav-link {
+  margin-bottom: 5px;
+  border-radius: 10px;
+  color: #bac2d0;
+  font-weight: 650;
+}
+
+.app-navbar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.app-navbar .nav-link[data-active] {
+  background: linear-gradient(135deg, #f58a23, #dc7415);
+  color: white;
+}
+
+.branch-card {
+  background: rgba(255, 255, 255, 0.07);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-main {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.stat-card,
+.student-card,
+.class-card,
+.schedule-row {
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.student-card:hover,
+.class-card:hover,
+.schedule-row:hover {
+  transform: translateY(-2px);
+  border-color: #ffd0a4;
+  box-shadow: 0 12px 32px rgba(26, 33, 48, 0.08);
+}
+
+.schedule-row {
+  cursor: pointer;
+}
+
+.stat-value {
+  margin: 5px 0 3px;
+  font-size: clamp(1.7rem, 3vw, 2.15rem);
+  letter-spacing: -0.04em;
+  color: #141b2b;
+}
+
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #dc7415;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(245, 138, 35, 0.16), transparent 28%),
+    radial-gradient(circle at 90% 85%, rgba(45, 93, 158, 0.12), transparent 28%),
+    #f8f8f6;
+}
+
+.login-layout {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
+  gap: 72px;
+  align-items: center;
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.login-brand-panel h1 {
+  font-size: clamp(2.8rem, 6vw, 5rem);
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+  color: #111827;
+}
+
+.login-brand-panel h1 span {
+  color: #dc7415;
+}
+
+.login-feature {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  align-items: start;
+  max-width: 520px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 430px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+}
+
+.class-picker {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 11px;
+  align-items: center;
+  width: 100%;
+  padding: 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: #344054;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.class-picker:hover {
+  background: #f8fafc;
+}
+
+.class-picker.active {
+  color: #924a14;
+  background: #fff5eb;
+  border-color: #ffd0a4;
+}
+
+.class-picker strong,
+.class-picker small {
+  display: block;
+}
+
+.class-picker small {
+  margin-top: 3px;
+  color: #7a8494;
+}
+
+.attendance-row {
+  margin: 0 -6px;
+  padding: 12px 8px;
+  border-bottom: 1px solid #eef0f3;
+  border-radius: 8px;
+}
+
+.attendance-row.present {
+  background: #f0fdf5;
+}
+
+.attendance-remark {
+  width: min(240px, 28vw);
+}
+
+.report-class-row + .report-class-row {
+  margin-top: 18px;
+}
+
+.mobile-nav {
+  position: fixed;
+  z-index: 200;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: 66px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px;
+  border: 1px solid #e5e8ec;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.mobile-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 12px;
+  color: #7a8494;
+  background: transparent;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.mobile-nav button.active {
+  color: #dc7415;
+  background: #fff5eb;
+}
+
+@media (max-width: 62em) {
+  .app-main {
+    padding: 22px 16px 100px;
+  }
+
+  .login-layout {
+    grid-template-columns: 1fr;
+    gap: 42px;
+    max-width: 640px;
+  }
+
+  .login-brand-panel {
+    text-align: center;
+  }
+
+  .login-brand-panel > .mantine-ThemeIcon-root,
+  .login-feature {
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (max-width: 40em) {
+  .login-brand-panel {
+    display: none;
+  }
+
+  .login-layout {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+  }
+
+  .login-card {
+    padding: 26px;
+  }
+
+  .attendance-remark {
+    display: none;
+  }
+
+  .mantine-AppShell-header .mantine-Select-root {
+    width: 128px;
+  }
+}
