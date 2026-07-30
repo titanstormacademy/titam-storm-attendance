@@ -2,8 +2,8 @@ import argparse
 import json
 import mimetypes
 import os
-from collections import defaultdict
-from datetime import date, datetime, time, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -64,6 +64,19 @@ def month_value(value):
     if not normalized:
         return ""
     return f"{normalized[:7]}-01"
+
+
+def repaired_class_times(row, duration_by_class):
+    start = time_value(row.get("StartTime")) or None
+    end = time_value(row.get("EndTime")) or None
+    repaired = False
+    if start and end and end <= start:
+        duration = duration_by_class.get(integer_value(row.get("ID")))
+        if duration and duration > 0:
+            start_datetime = datetime.combine(date.today(), time.fromisoformat(start))
+            end = (start_datetime + timedelta(hours=duration)).time().strftime("%H:%M:%S")
+            repaired = True
+    return start, end, repaired
 
 
 def load_rows(path):
@@ -169,6 +182,27 @@ def transform(path):
     class_map, branch_map, unresolved = infer_enrollment_maps(rows)
     enrollments, enrollment_repairs, enrollment_errors = transform_enrollments(rows, class_map, branch_map)
     coaches_by_id = {integer_value(row.get("ID")): key(row.get("CoachType")) or "Head" for row in rows["Coaches"]}
+    durations = defaultdict(list)
+    for row in rows["CoachAttendance"]:
+        class_id = integer_value(row.get("ClassID"))
+        hours = decimal_value(row.get("Hours"))
+        if class_id and hours and hours > 0:
+            durations[class_id].append(hours)
+    duration_by_class = {class_id: Counter(values).most_common(1)[0][0] for class_id, values in durations.items()}
+    transformed_classes = []
+    class_time_repairs = 0
+    for row in rows["Classes"]:
+        start_time, end_time, repaired = repaired_class_times(row, duration_by_class)
+        class_time_repairs += int(repaired)
+        transformed_classes.append({
+            "id": integer_value(row.get("ID")),
+            "branch_id": integer_value(row.get("BranchID")),
+            "label": key(row.get("Label")),
+            "day_of_week": key(row.get("DayOfWeek")),
+            "start_time": start_time,
+            "end_time": end_time,
+            "coach_id": integer_value(row.get("CoachID")),
+        })
 
     tables = {
         "branches": [{
@@ -213,15 +247,7 @@ def transform(path):
             "created_at": timestamp_value(row.get("CreatedAt")),
             "_asset_url": key(row.get("PhotoURL")),
         } for row in rows["Coaches"]],
-        "classes": [{
-            "id": integer_value(row.get("ID")),
-            "branch_id": integer_value(row.get("BranchID")),
-            "label": key(row.get("Label")),
-            "day_of_week": key(row.get("DayOfWeek")),
-            "start_time": time_value(row.get("StartTime")) or None,
-            "end_time": time_value(row.get("EndTime")) or None,
-            "coach_id": integer_value(row.get("CoachID")),
-        } for row in rows["Classes"]],
+        "classes": transformed_classes,
         "sessions": [{
             "id": integer_value(row.get("ID")),
             "branch_id": integer_value(row.get("BranchID")),
@@ -311,6 +337,7 @@ def transform(path):
         "repairs": {
             "legacyClassMappings": len(class_map),
             "legacyBranchMappings": len(branch_map),
+            "classTimesRepaired": class_time_repairs,
             **enrollment_repairs,
         },
         "unresolved": unresolved + enrollment_errors,
