@@ -18,6 +18,9 @@ src/assets/vite.svg
 public/favicon.svg
 public/icons.svg
 mobile-check.png
+.migration-backups/
+__pycache__/
+*.pyc
 
 # Editor directories and files
 .vscode/*
