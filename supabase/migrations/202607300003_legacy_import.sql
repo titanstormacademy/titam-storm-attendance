@@ -15,16 +15,16 @@ begin
     raise exception 'Import payload must be a JSON object';
   end if;
 
-  delete from public.coach_payment_lines;
-  delete from public.payments;
-  delete from public.coach_payments;
-  delete from public.coach_attendance;
-  delete from public.attendance;
-  delete from public.enrollments;
-  delete from public.sessions;
-  delete from public.classes;
-  delete from public.coaches;
-  delete from public.students;
+  delete from public.coach_payment_lines where id is not null;
+  delete from public.payments where id is not null;
+  delete from public.coach_payments where id is not null;
+  delete from public.coach_attendance where id is not null;
+  delete from public.attendance where student_id is not null;
+  delete from public.enrollments where id is not null;
+  delete from public.sessions where id is not null;
+  delete from public.classes where id is not null;
+  delete from public.coaches where id is not null;
+  delete from public.students where id is not null;
 
   insert into public.branches (id, name, subtitle, status, created_at)
   select id, name, coalesce(subtitle, ''), coalesce(status, 'Active'), coalesce(created_at, now())
@@ -208,7 +208,7 @@ begin
     hours numeric
   );
 
-  delete from public.head_coach_rates;
+  delete from public.head_coach_rates where id is not null;
   insert into public.head_coach_rates (min_students, max_students, min_fee, max_fee, payout)
   select min_students, max_students, min_fee, max_fee, payout
   from jsonb_to_recordset(coalesce(p_payload -> 'head_coach_rates', '[]'::jsonb)) as rows(
