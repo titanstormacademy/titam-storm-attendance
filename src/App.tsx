@@ -135,11 +135,11 @@ export default function App() {
 
       <AppShell.Main className="app-main">
         <Box maw={1500} mx="auto">
-          {dataQuery.isLoading || !dataQuery.data ? <PageLoader /> : <Suspense fallback={<PageLoader />}>{renderPage(page, {
+          {dataQuery.isLoading || !dataQuery.data ? <PageLoader /> : <Suspense fallback={<PageLoader />}><Box key={`${page}-${branchId}`} className="page-transition">{renderPage(page, {
             branchId: branchId!, branchName: activeBranch?.name || '', data: dataQuery.data, isAdmin: Boolean(isAdmin),
             onChanged: async () => { await dataQuery.refetch() }, refreshAll,
             navigate, branches, settings: settingsQuery.data || { academy_name: 'Titan Storm', logo_path: null, default_branch_id: branchId },
-          })}</Suspense>}
+          })}</Box></Suspense>}
         </Box>
       </AppShell.Main>
 

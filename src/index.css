@@ -6,8 +6,8 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  color: #172033;
-  background: #f6f7f9;
+  color: #16233f;
+  background: #f5f7fa;
 }
 
 html,
@@ -19,8 +19,8 @@ body,
 
 body {
   background:
-    radial-gradient(circle at 90% -10%, rgba(245, 138, 35, 0.08), transparent 30%),
-    #f6f7f9;
+    radial-gradient(circle at 90% -10%, rgba(242, 101, 34, 0.1), transparent 30%),
+    #f5f7fa;
 }
 
 button,
@@ -32,7 +32,7 @@ select {
 
 .app-header {
   color: white;
-  background: #101828;
+  background: #101b33;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
   backdrop-filter: blur(14px);
@@ -73,9 +73,10 @@ select {
 }
 
 .app-navbar {
-  background: #101828;
+  background: linear-gradient(180deg, #101b33 0%, #0d1526 100%);
   border: 0;
   color: white;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.35s ease;
 }
 
 .app-navbar .mantine-Text-root {
@@ -87,15 +88,17 @@ select {
   border-radius: 10px;
   color: #bac2d0;
   font-weight: 650;
+  transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 .app-navbar .nav-link:hover {
   background: rgba(255, 255, 255, 0.08);
   color: white;
+  transform: translateX(3px);
 }
 
 .app-navbar .nav-link[data-active] {
-  background: linear-gradient(135deg, #f58a23, #dc7415);
+  background: linear-gradient(135deg, #f26522, #d4531f);
   color: white;
 }
 
@@ -110,19 +113,88 @@ select {
   background: transparent;
 }
 
+.page-transition {
+  animation: page-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-header h2,
+.mantine-Title-root {
+  color: #16233f;
+  letter-spacing: 0.015em;
+}
+
+.page-header h2 {
+  text-transform: uppercase;
+}
+
+.page-header-copy::before {
+  content: '';
+  display: block;
+  width: 30px;
+  height: 3px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: #f26522;
+}
+
+.mantine-Input-input:focus,
+.mantine-Input-input:focus-within {
+  border-color: #f26522;
+  box-shadow: 0 0 0 3px rgba(242, 101, 34, 0.12);
+}
+
+.app-main .mantine-Paper-root {
+  border-color: #e5e8ee;
+  box-shadow: 0 8px 26px -20px rgba(16, 27, 51, 0.5);
+}
+
+.app-main .mantine-Button-root[data-variant='filled'] {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 20px -10px rgba(242, 101, 34, 0.72);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.app-main .mantine-Button-root[data-variant='filled']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+.app-main .mantine-Button-root[data-variant='filled']:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -12px rgba(242, 101, 34, 0.78);
+}
+
+.app-main .mantine-Button-root[data-variant='filled']:hover::after {
+  left: 130%;
+}
+
+.app-main .mantine-Button-root:active,
+.app-main .mantine-ActionIcon-root:active {
+  transform: scale(0.97);
+}
+
 .stat-card,
 .student-card,
 .class-card,
 .schedule-row {
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, border-color 0.25s ease;
 }
 
 .student-card:hover,
 .class-card:hover,
 .schedule-row:hover {
-  transform: translateY(-2px);
-  border-color: #ffd0a4;
-  box-shadow: 0 12px 32px rgba(26, 33, 48, 0.08);
+  transform: translateY(-5px);
+  border-color: #ffc9aa;
+  box-shadow: 0 24px 40px -22px rgba(16, 27, 51, 0.48);
 }
 
 .schedule-row,
@@ -151,7 +223,12 @@ select {
 .dashboard-stats .stat-card {
   position: relative;
   min-width: 0;
+  animation: card-enter 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+.dashboard-stats .stat-card:nth-child(2) { animation-delay: 70ms; }
+.dashboard-stats .stat-card:nth-child(3) { animation-delay: 140ms; }
+.dashboard-stats .stat-card:nth-child(4) { animation-delay: 210ms; }
 
 .dashboard-stats .stat-card > .mantine-Group-root {
   min-width: 0;
@@ -166,7 +243,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: #dc7415;
+  color: #d4531f;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -200,7 +277,7 @@ select {
 }
 
 .login-brand-panel h1 span {
-  color: #dc7415;
+  color: #d4531f;
 }
 
 .login-feature {
@@ -238,9 +315,9 @@ select {
 }
 
 .class-picker.active {
-  color: #924a14;
-  background: #fff5eb;
-  border-color: #ffd0a4;
+  color: #d4531f;
+  background: #fff4ed;
+  border-color: #ffc9aa;
 }
 
 .class-picker strong,
@@ -313,8 +390,8 @@ select {
 }
 
 .mobile-nav button.active {
-  color: #b75d12;
-  background: #fff5eb;
+  color: #d4531f;
+  background: #fff4ed;
 }
 
 .mobile-nav button:focus-visible,
@@ -333,8 +410,7 @@ select {
   height: auto;
   padding: 0;
   border: 0;
-  background: rgba(16, 24, 40, 0.48);
-  backdrop-filter: blur(2px);
+  background: rgba(13, 21, 38, 0.58);
   cursor: pointer;
 }
 
@@ -440,8 +516,9 @@ select {
   }
 
   .app-navbar {
+    z-index: 240 !important;
     padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
-    box-shadow: 12px 0 36px rgba(16, 24, 40, 0.24);
+    box-shadow: 12px 0 36px rgba(13, 21, 38, 0.38);
   }
 
   .app-navbar .nav-link {
@@ -450,7 +527,10 @@ select {
 
   .app-main {
     min-width: 0;
-    padding: 16px 12px calc(96px + env(safe-area-inset-bottom));
+    padding-top: calc(76px + env(safe-area-inset-top)) !important;
+    padding-right: 12px;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    padding-left: 12px;
     overflow-x: hidden;
   }
 
