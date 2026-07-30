@@ -18,7 +18,7 @@ export function DashboardPage({ data, branchName, isAdmin, onAttendance }: { dat
   return (
     <>
       <PageHeader title={`Good ${greeting()}, team`} description={`${branchName} · ${today.format('dddd, D MMMM YYYY')}`} />
-      <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} mb="xl">
+      <SimpleGrid className="dashboard-stats" cols={{ base: 2, lg: 4 }} spacing={{ base: 'sm', sm: 'md' }} mb="xl">
         <StatCard label="Active students" value={activeStudents.length} detail={`${data.students.filter((student) => student.status === 'Trial').length} currently on trial`} icon={IconUsers} />
         <StatCard label="Today's classes" value={todayClasses.length} detail={`${todayClasses.reduce((sum, item) => sum + data.enrollments.filter((enrollment) => enrollment.class_id === item.id).length, 0)} scheduled students`} icon={IconCalendarEvent} color="blue" />
         {isAdmin && <StatCard label="Fees this month" value={`RM ${monthRevenue.toLocaleString('en-MY', { minimumFractionDigits: 0 })}`} detail={`${paidStudents} students paid`} icon={IconCash} color="green" />}

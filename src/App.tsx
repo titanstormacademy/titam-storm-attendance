@@ -101,8 +101,9 @@ export default function App() {
       <AppShell.Header className="app-header">
         <Group className="app-header-inner" h="100%" px={{ base: 'xs', sm: 'xl' }} justify="space-between" wrap="nowrap">
           <Group className="app-brand" gap="sm" wrap="nowrap">
-            {logoUrl ? <Image src={logoUrl} alt="" w={{ base: 36, sm: 42 }} h={{ base: 36, sm: 42 }} radius="md" fit="contain" /> : <ThemeIcon size={42} radius="md" color="orange"><IconBallBasketball size={24} /></ThemeIcon>}
-            <Box visibleFrom="sm"><Text fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text c="dimmed" size="xs">Academy operations</Text></Box>
+            {logoUrl ? <Image className="app-logo" src={logoUrl} alt="" w={{ base: 36, sm: 42 }} h={{ base: 36, sm: 42 }} radius="md" fit="contain" /> : <ThemeIcon className="app-logo" size={42} radius="md" color="orange"><IconBallBasketball size={24} /></ThemeIcon>}
+            <Text className="mobile-brand-name" hiddenFrom="sm" fw={850} c="white">Titan Storm</Text>
+            <Box visibleFrom="sm"><Text className="desktop-brand-name" fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text className="desktop-brand-subtitle" size="xs">Academy operations</Text></Box>
           </Group>
           <Group className="app-header-actions" gap="md" wrap="nowrap">
             <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={(value) => { if (value) { setBranchId(Number(value)); localStorage.setItem('titan-storm-branch', value); setPage('dashboard') } }} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />

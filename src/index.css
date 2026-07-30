@@ -31,9 +31,45 @@ select {
 }
 
 .app-header {
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #e8ebef;
+  color: white;
+  background: #101828;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
   backdrop-filter: blur(14px);
+}
+
+.app-header .desktop-brand-name {
+  color: white;
+}
+
+.app-header .desktop-brand-subtitle {
+  color: #aeb8c8;
+}
+
+.app-header .app-logo {
+  flex: 0 0 auto;
+  padding: 2px;
+  background: white;
+  border-radius: 10px;
+}
+
+.app-header .branch-select .mantine-Input-input {
+  color: white;
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.app-header .branch-select .mantine-Input-section,
+.app-header .branch-select svg {
+  color: #d7deea;
+}
+
+.app-header .profile-menu-trigger {
+  color: white !important;
+}
+
+.app-header .profile-menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .app-navbar {
@@ -110,6 +146,20 @@ select {
   font-size: clamp(1.7rem, 3vw, 2.15rem);
   letter-spacing: -0.04em;
   color: #141b2b;
+}
+
+.dashboard-stats .stat-card {
+  position: relative;
+  min-width: 0;
+}
+
+.dashboard-stats .stat-card > .mantine-Group-root {
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.dashboard-stats .stat-card > .mantine-Group-root > .mantine-Box-root {
+  min-width: 0;
 }
 
 .text-button {
@@ -437,6 +487,47 @@ select {
     flex: 1 1 180px;
   }
 
+  .dashboard-stats .stat-card {
+    min-height: 126px;
+    padding: 14px !important;
+  }
+
+  .dashboard-stats .stat-card > .mantine-Group-root {
+    display: block;
+  }
+
+  .dashboard-stats .stat-card .mantine-ThemeIcon-root {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .dashboard-stats .stat-card > .mantine-Group-root > .mantine-Box-root {
+    padding-right: 34px;
+  }
+
+  .dashboard-stats .stat-card .mantine-Text-root:first-child {
+    min-height: 34px;
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+
+  .dashboard-stats .stat-card .stat-value {
+    min-height: 0;
+    padding-right: 0;
+    font-size: 1.55rem;
+    line-height: 1.15;
+  }
+
+  .dashboard-stats .stat-card .mantine-Text-root:last-child {
+    min-height: 0;
+    font-size: 0.7rem;
+    line-height: 1.25;
+  }
+
   .app-main .mantine-Paper-root,
   .mantine-Modal-body {
     padding: var(--mantine-spacing-md) !important;
@@ -551,6 +642,10 @@ select {
 }
 
 @media (max-width: 30em) {
+  .mobile-brand-name {
+    display: none;
+  }
+
   .page-header-action > .mantine-Group-root > * {
     width: 100% !important;
     flex-basis: 100%;
