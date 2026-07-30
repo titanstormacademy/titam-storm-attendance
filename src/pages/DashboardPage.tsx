@@ -4,7 +4,7 @@ import { IconBallBasketball, IconCalendarEvent, IconCash, IconChevronRight, Icon
 import { EmptyState, PageHeader, StatCard } from '../components/ui'
 import type { BootstrapData } from '../types/models'
 
-export function DashboardPage({ data, branchName, onAttendance }: { data: BootstrapData; branchName: string; onAttendance: () => void }) {
+export function DashboardPage({ data, branchName, isAdmin, onAttendance }: { data: BootstrapData; branchName: string; isAdmin: boolean; onAttendance: () => void }) {
   const today = dayjs()
   const todayName = today.format('dddd')
   const todayDate = today.format('YYYY-MM-DD')
@@ -21,7 +21,7 @@ export function DashboardPage({ data, branchName, onAttendance }: { data: Bootst
       <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} mb="xl">
         <StatCard label="Active students" value={activeStudents.length} detail={`${data.students.filter((student) => student.status === 'Trial').length} currently on trial`} icon={IconUsers} />
         <StatCard label="Today's classes" value={todayClasses.length} detail={`${todayClasses.reduce((sum, item) => sum + data.enrollments.filter((enrollment) => enrollment.class_id === item.id).length, 0)} scheduled students`} icon={IconCalendarEvent} color="blue" />
-        <StatCard label="Fees this month" value={`RM ${monthRevenue.toLocaleString('en-MY', { minimumFractionDigits: 0 })}`} detail={`${paidStudents} students paid`} icon={IconCash} color="green" />
+        {isAdmin && <StatCard label="Fees this month" value={`RM ${monthRevenue.toLocaleString('en-MY', { minimumFractionDigits: 0 })}`} detail={`${paidStudents} students paid`} icon={IconCash} color="green" />}
         <StatCard label="Attendance records" value={data.sessions.filter((session) => session.session_date === todayDate).length} detail="Sessions ready today" icon={IconClipboardCheck} color="violet" />
       </SimpleGrid>
 
@@ -50,12 +50,10 @@ export function DashboardPage({ data, branchName, onAttendance }: { data: Bootst
           ) : <EmptyState title="No classes today" message="Enjoy the break or add a one-off session from the Classes page." icon={IconCalendarEvent} />}
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 4 }}>
-          <Title order={3} mb="sm">Monthly pulse</Title>
-          <Paper p="xl" radius="lg" withBorder>
-            <Text size="sm" c="dimmed" fw={600}>Fee collection progress</Text>
-            <Group align="end" gap={8} mt="xs"><Text fz={34} fw={850}>{collectionRate}%</Text><Text c="dimmed" mb={7}>paid</Text></Group>
-            <Progress value={collectionRate} size="lg" radius="xl" mt="md" color="green" />
-            <Stack mt="xl" gap="md">
+          <Title order={3} mb="sm">{isAdmin ? 'Monthly pulse' : 'Branch pulse'}</Title>
+          <Paper p={{ base: 'lg', sm: 'xl' }} radius="lg" withBorder>
+            {isAdmin && <><Text size="sm" c="dimmed" fw={600}>Fee collection progress</Text><Group align="end" gap={8} mt="xs"><Text fz={34} fw={850}>{collectionRate}%</Text><Text c="dimmed" mb={7}>paid</Text></Group><Progress value={collectionRate} size="lg" radius="xl" mt="md" color="green" /></>}
+            <Stack mt={isAdmin ? 'xl' : 0} gap="md">
               <Metric icon={<IconSchool size={18} />} label="Classes running" value={String(data.classes.length)} />
               <Metric icon={<IconUsers size={18} />} label="Total enrollments" value={String(data.enrollments.length)} />
               <Metric icon={<IconBallBasketball size={18} />} label="Active coaches" value={String(data.coaches.filter((coach) => coach.status === 'Active').length)} />

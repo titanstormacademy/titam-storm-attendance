@@ -420,7 +420,7 @@ begin
   new.branch_id = v_session_branch;
   new.class_id = v_class;
   new.attendance_date = v_date;
-  if new.hours is null then
+  if tg_op = 'INSERT' or not public.is_admin() then
     select start_time, end_time into v_start, v_end from public.classes where id = v_class;
     new.hours = case when v_start is null or v_end is null then 0 else round((extract(epoch from (v_end - v_start)) / 3600)::numeric, 2) end;
   end if;

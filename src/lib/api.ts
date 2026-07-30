@@ -237,11 +237,11 @@ export async function getBranchMemberships() {
 }
 
 export async function updateProfileAccess(userId: string, role: Profile['role'], branchIds: number[]) {
-  const profileResult = await supabase.from('profiles').update({ role }).eq('id', userId)
-  if (profileResult.error) throw new Error(profileResult.error.message)
-  const deleteResult = await supabase.from('branch_memberships').delete().eq('user_id', userId)
-  if (deleteResult.error) throw new Error(deleteResult.error.message)
-  if (branchIds.length) unwrap(await supabase.from('branch_memberships').insert(branchIds.map((branchId) => ({ user_id: userId, branch_id: branchId }))))
+  unwrap(await supabase.rpc('update_profile_access', { p_user_id: userId, p_role: role, p_branch_ids: branchIds }))
+}
+
+export async function reconcileStudentEnrollments(studentId: number, enrollments: Array<{ class_id: number; start_date: string }>) {
+  unwrap(await supabase.rpc('reconcile_student_enrollments', { p_student_id: studentId, p_enrollments: enrollments }))
 }
 
 export async function getAttendanceReport(branchId: number, startDate: string, endDate: string) {
@@ -252,16 +252,34 @@ export async function getAttendanceReport(branchId: number, startDate: string, e
 }
 
 export async function uploadImage(bucket: string, branchId: number, file: File, entityId?: number) {
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const prepared = await optimizeImage(file, bucket === 'payment-receipts' ? 2000 : 1400)
+  const extension = prepared.type === 'image/webp' ? 'webp' : file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${branchId}/${entityId || 'new'}/${crypto.randomUUID()}.${extension}`
-  const result = await supabase.storage.from(bucket).upload(path, file, { upsert: false, contentType: file.type })
+  const result = await supabase.storage.from(bucket).upload(path, prepared, { upsert: false, contentType: prepared.type })
   if (result.error) throw new Error(result.error.message)
   return result.data.path
 }
 
+async function optimizeImage(file: File, maxDimension: number) {
+  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return file
+  const image = await createImageBitmap(file)
+  const scale = Math.min(1, maxDimension / Math.max(image.width, image.height))
+  if (scale === 1 && file.size <= 1_500_000) {
+    image.close()
+    return file
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(image.width * scale))
+  canvas.height = Math.max(1, Math.round(image.height * scale))
+  canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
+  image.close()
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not resize image')), 'image/webp', 0.84))
+  return new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+}
+
 export async function scanReceipt(file: File) {
   const body = new FormData()
-  body.append('file', file)
+  body.append('file', await optimizeImage(file, 2000))
   const result = await supabase.functions.invoke('receipt-ocr', { body })
   if (result.error) throw new Error(result.error.message)
   return result.data as {

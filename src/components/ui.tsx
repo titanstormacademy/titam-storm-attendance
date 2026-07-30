@@ -1,15 +1,30 @@
-import { Avatar, Box, Group, Paper, Skeleton, Stack, Text, ThemeIcon, Title } from '@mantine/core'
+import { Avatar, Box, Group, Modal, Paper, Skeleton, Stack, Text, ThemeIcon, Title, type ModalProps } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import type { Icon } from '@tabler/icons-react'
 
 export function PageHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
   return (
-    <Group justify="space-between" align="flex-start" mb="xl" wrap="wrap">
-      <Box>
+    <Group className="page-header" justify="space-between" align="flex-start" mb="xl" wrap="wrap">
+      <Box className="page-header-copy">
         <Title order={2}>{title}</Title>
         <Text c="dimmed" mt={4}>{description}</Text>
       </Box>
-      {action}
+      {action && <Box className="page-header-action">{action}</Box>}
     </Group>
+  )
+}
+
+export function ResponsiveModal({ centered, fullScreen, overlayProps, transitionProps, ...props }: ModalProps) {
+  const isMobile = useMediaQuery('(max-width: 48em)')
+
+  return (
+    <Modal
+      {...props}
+      centered={isMobile ? false : (centered ?? true)}
+      fullScreen={Boolean(fullScreen || isMobile)}
+      overlayProps={{ backgroundOpacity: 0.55, blur: 3, ...overlayProps }}
+      transitionProps={{ transition: isMobile ? 'slide-up' : 'pop', duration: 180, ...transitionProps }}
+    />
   )
 }
 

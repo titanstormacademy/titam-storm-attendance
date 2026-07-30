@@ -21,7 +21,7 @@ Configure `.env.local` with the Supabase project URL and publishable key. Never 
 
 ## Database
 
-Apply `supabase/migrations/202607300001_initial_schema.sql` once to a fresh Supabase project. The first registered account becomes an administrator.
+Apply the SQL files in `supabase/migrations/` in filename order. Existing installations that already ran the initial schema must also run `202607300002_legacy_parity.sql`. The first registered account becomes an administrator.
 
 ## Verification
 

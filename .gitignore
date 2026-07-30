@@ -17,6 +17,7 @@ src/assets/react.svg
 src/assets/vite.svg
 public/favicon.svg
 public/icons.svg
+mobile-check.png
 
 # Editor directories and files
 .vscode/*

@@ -24,11 +24,15 @@ export interface Student {
   nric: string
   gender: '' | 'Male' | 'Female'
   date_of_birth: string | null
+  height: string
   school: string
+  tshirt_size: string
   student_phone: string
   parent_name: string
   parent_contact: string
   email: string
+  father_height: string
+  mother_height: string
   monthly_fee: number | null
   level: '' | 'Beginner' | 'Intermediate' | 'Advanced'
   status: StudentStatus

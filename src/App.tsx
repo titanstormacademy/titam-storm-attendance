@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Alert, AppShell, Avatar, Box, Burger, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title } from '@mantine/core'
+import { Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
-import { IconAlertCircle, IconBallBasketball, IconBuilding, IconCalendarEvent, IconCash, IconChartBar, IconChevronDown, IconClipboardCheck, IconLogout, IconSchool, IconSettings, IconUsers, type Icon } from '@tabler/icons-react'
+import { IconAlertCircle, IconBallBasketball, IconBuilding, IconCalendarEvent, IconCash, IconChartBar, IconChevronDown, IconClipboardCheck, IconLogout, IconMenu2, IconSchool, IconSettings, IconUsers, type Icon } from '@tabler/icons-react'
 import { useAuth } from './contexts/useAuth'
 import { getAcademySettings, getBootstrapData, getBranches } from './lib/api'
 import { isSupabaseConfigured, publicImageUrl } from './lib/supabase'
@@ -89,43 +89,48 @@ export default function App() {
   if (!branchesQuery.isLoading && !activeBranches.length) return <Center h="100vh"><Paper p="xl" radius="lg" withBorder ta="center"><IconBuilding size={36} /><Title order={3} mt="md">No branch access yet</Title><Text c="dimmed" maw={420} mt="xs">Your account is ready, but an administrator must assign you to at least one branch.</Text><Button mt="lg" variant="light" onClick={signOut}>Sign out</Button></Paper></Center>
 
   const logoUrl = publicImageUrl('academy-assets', settingsQuery.data?.logo_path || null)
+  const primaryNavigation = visibleNavigation.slice(0, 3)
+  const isMoreActive = navbarOpened || !primaryNavigation.some((item) => item.key === page)
 
   return (
     <AppShell
-      header={{ height: 72 }}
-      navbar={{ width: 270, breakpoint: 'md', collapsed: { mobile: !navbarOpened } }}
+      header={{ height: { base: 60, sm: 72 } }}
+      navbar={{ width: 270, breakpoint: 'sm', collapsed: { mobile: !navbarOpened } }}
       padding="xl"
     >
       <AppShell.Header className="app-header">
-        <Group h="100%" px={{ base: 'md', md: 'xl' }} justify="space-between" wrap="nowrap">
-          <Group wrap="nowrap">
-            <Burger opened={navbarOpened} onClick={navbar.toggle} hiddenFrom="md" size="sm" />
-            <Group gap="sm" wrap="nowrap">
-              {logoUrl ? <Image src={logoUrl} w={42} h={42} radius="md" fit="contain" /> : <ThemeIcon size={42} radius="md" color="orange"><IconBallBasketball size={24} /></ThemeIcon>}
-              <Box visibleFrom="xs"><Text fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text c="dimmed" size="xs">Academy operations</Text></Box>
-            </Group>
+        <Group className="app-header-inner" h="100%" px={{ base: 'xs', sm: 'xl' }} justify="space-between" wrap="nowrap">
+          <Group className="app-brand" gap="sm" wrap="nowrap">
+            {logoUrl ? <Image src={logoUrl} alt="" w={{ base: 36, sm: 42 }} h={{ base: 36, sm: 42 }} radius="md" fit="contain" /> : <ThemeIcon size={42} radius="md" color="orange"><IconBallBasketball size={24} /></ThemeIcon>}
+            <Box visibleFrom="sm"><Text fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text c="dimmed" size="xs">Academy operations</Text></Box>
           </Group>
-          <Group wrap="nowrap">
-            <Select leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={(value) => { if (value) { setBranchId(Number(value)); localStorage.setItem('titan-storm-branch', value); setPage('dashboard') } }} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 150, sm: 210 }} allowDeselect={false} />
+          <Group className="app-header-actions" gap="md" wrap="nowrap">
+            <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={(value) => { if (value) { setBranchId(Number(value)); localStorage.setItem('titan-storm-branch', value); setPage('dashboard') } }} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
             <Menu position="bottom-end" shadow="lg">
-              <Menu.Target><Button variant="subtle" color="dark" px="xs" rightSection={<IconChevronDown size={14} />}><Avatar name={profile.full_name} color="orange" size={32} mr={8} /><Box visibleFrom="sm" ta="left"><Text size="sm" fw={700} lh={1}>{profile.full_name}</Text><Text size="xs" c="dimmed" mt={4}>{isAdmin ? 'Administrator' : 'Staff'}</Text></Box></Button></Menu.Target>
+              <Menu.Target>
+                <Button className="profile-menu-trigger" aria-label={`Open account menu for ${profile.full_name}`} variant="subtle" color="dark" px="xs" rightSection={<Box visibleFrom="sm"><IconChevronDown size={14} /></Box>}>
+                  <Group gap="xs" wrap="nowrap"><Avatar name={profile.full_name} color="orange" size={32} /><Box visibleFrom="sm" ta="left"><Text size="sm" fw={700} lh={1}>{profile.full_name}</Text><Text size="xs" c="dimmed" mt={4}>{isAdmin ? 'Administrator' : 'Staff'}</Text></Box></Group>
+                </Button>
+              </Menu.Target>
               <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={signOut}>Sign out</Menu.Item></Menu.Dropdown>
             </Menu>
           </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md" className="app-navbar">
+      <AppShell.Navbar id="full-navigation" p="md" className="app-navbar" aria-label="Full navigation">
         <Stack h="100%">
           <Box flex={1}>
             <Text size="xs" tt="uppercase" fw={800} c="dimmed" px="sm" mb="xs">Workspace</Text>
-            {visibleNavigation.map((item) => <NavLink key={item.key} label={item.label} leftSection={<item.icon size={19} stroke={1.8} />} active={page === item.key} onClick={() => navigate(item.key)} variant="filled" className="nav-link" />)}
+            {visibleNavigation.map((item) => <NavLink key={item.key} label={item.label} leftSection={<item.icon size={19} stroke={1.8} />} active={page === item.key} aria-current={page === item.key ? 'page' : undefined} onClick={() => navigate(item.key)} variant="filled" className="nav-link" />)}
           </Box>
           <Paper p="md" radius="lg" className="branch-card">
             <Group wrap="nowrap"><ThemeIcon variant="light" color="orange"><IconBuilding size={18} /></ThemeIcon><Box style={{ minWidth: 0 }}><Text size="sm" fw={700} truncate>{activeBranch?.name}</Text><Text size="xs" c="dimmed" truncate>{activeBranch?.subtitle || 'Active branch'}</Text></Box></Group>
           </Paper>
         </Stack>
       </AppShell.Navbar>
+
+      {navbarOpened && <Box component="button" type="button" className="mobile-nav-overlay" aria-label="Close full navigation" onClick={navbar.close} hiddenFrom="sm" />}
 
       <AppShell.Main className="app-main">
         <Box maw={1500} mx="auto">
@@ -137,8 +142,9 @@ export default function App() {
         </Box>
       </AppShell.Main>
 
-      <Box className="mobile-nav" hiddenFrom="md">
-        {visibleNavigation.slice(0, 4).map((item) => <button key={item.key} className={page === item.key ? 'active' : ''} onClick={() => navigate(item.key)}><item.icon size={21} /><span>{item.label.split(' ')[0]}</span></button>)}
+      <Box component="nav" className="mobile-nav" aria-label="Primary navigation" hiddenFrom="sm">
+        {primaryNavigation.map((item) => <button type="button" key={item.key} className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} onClick={() => navigate(item.key)}><item.icon size={21} aria-hidden="true" /><span>{item.label.split(' ')[0]}</span></button>)}
+        <button type="button" className={isMoreActive ? 'active' : ''} aria-expanded={navbarOpened} aria-controls="full-navigation" onClick={navbar.toggle}><IconMenu2 size={21} aria-hidden="true" /><span>More</span></button>
       </Box>
     </AppShell>
   )
@@ -158,14 +164,14 @@ interface PageProps {
 
 function renderPage(page: PageKey, props: PageProps) {
   switch (page) {
-    case 'attendance': return <AttendancePage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
+    case 'attendance': return <AttendancePage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} onChanged={props.onChanged} />
     case 'students': return <StudentsPage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} onChanged={props.onChanged} />
     case 'classes': return <ClassesPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'payments': return <PaymentsPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'coaches': return <CoachesPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'reports': return <ReportsPage branchId={props.branchId} data={props.data} />
     case 'settings': return <SettingsPage branches={props.branches} settings={props.settings} onChanged={props.refreshAll} />
-    default: return <DashboardPage data={props.data} branchName={props.branchName} onAttendance={() => props.navigate('attendance')} />
+    default: return <DashboardPage data={props.data} branchName={props.branchName} isAdmin={props.isAdmin} onAttendance={() => props.navigate('attendance')} />
   }
 }
 
