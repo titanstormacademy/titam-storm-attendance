@@ -345,6 +345,147 @@ select {
   width: min(240px, 28vw);
 }
 
+.attendance-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.attendance-detail-header h2 {
+  color: #16233f;
+  text-transform: uppercase;
+}
+
+.attendance-date-pills {
+  display: flex;
+  gap: 10px;
+  margin: 0 -4px 20px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.attendance-date-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.attendance-date-pills button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #e5e8ee;
+  border-radius: 999px;
+  color: #33456f;
+  background: white;
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.attendance-date-pills button:hover {
+  border-color: #ff7f43;
+  transform: translateY(-1px);
+}
+
+.attendance-date-pills button.active {
+  color: white;
+  background: #f26522;
+  border-color: #f26522;
+  box-shadow: 0 8px 20px -10px rgba(242, 101, 34, 0.7);
+}
+
+.attendance-section-label,
+.attendance-level-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #33456f;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.attendance-level-label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.attendance-class-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.3s ease;
+}
+
+.attendance-class-card:hover {
+  transform: translateY(-3px);
+  border-color: #ffc9aa;
+  box-shadow: 0 18px 34px -22px rgba(16, 27, 51, 0.55) !important;
+}
+
+.attendance-card-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: #d4531f;
+  font-weight: 700;
+}
+
+.attendance-summary-card {
+  display: grid;
+  min-height: 108px;
+  place-content: center;
+  text-align: center;
+  background: white;
+}
+
+.attendance-summary-card.present {
+  background: #dcfce7;
+  border-color: #bbf7d0 !important;
+}
+
+.attendance-summary-value {
+  color: #0d1526;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.attendance-student-card {
+  border-left: 3px solid transparent !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.25s ease;
+}
+
+.attendance-student-card.present {
+  background: #f0fdf4;
+  border-left-color: #22c55e !important;
+}
+
+.attendance-student-card .mantine-Avatar-root {
+  flex: 0 0 auto;
+  box-shadow: 0 6px 16px -10px rgba(13, 21, 38, 0.6);
+}
+
+.attendance-present-button {
+  min-width: 84px;
+}
+
+.attendance-tools {
+  padding: 12px;
+  border: 1px solid #e5e8ee;
+  border-radius: 14px;
+  background: white;
+}
+
 .report-class-row + .report-class-row {
   margin-top: 18px;
 }
