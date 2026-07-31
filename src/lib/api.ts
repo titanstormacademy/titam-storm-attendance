@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import { supabase } from './supabase'
+import { supabase, thumbnailPath } from './supabase'
 import type {
   AcademyClass,
   Attendance,
@@ -252,11 +252,22 @@ export async function getAttendanceReport(branchId: number, startDate: string, e
 }
 
 export async function uploadImage(bucket: string, branchId: number, file: File, entityId?: number) {
-  const prepared = await optimizeImage(file, bucket === 'payment-receipts' ? 2000 : 1400)
+  const profilePhoto = bucket === 'student-photos' || bucket === 'coach-photos'
+  const prepared = await optimizeImage(file, bucket === 'payment-receipts' ? 2000 : 1600)
   const extension = prepared.type === 'image/webp' ? 'webp' : file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${branchId}/${entityId || 'new'}/${crypto.randomUUID()}.${extension}`
-  const result = await supabase.storage.from(bucket).upload(path, prepared, { upsert: false, contentType: prepared.type })
+  const result = await supabase.storage.from(bucket).upload(path, prepared, { upsert: false, contentType: prepared.type, cacheControl: '31536000' })
   if (result.error) throw new Error(result.error.message)
+  if (profilePhoto) {
+    try {
+      const thumbnail = await createThumbnail(file)
+      const thumbnailResult = await supabase.storage.from(bucket).upload(thumbnailPath(path), thumbnail, { upsert: true, contentType: 'image/webp', cacheControl: '31536000' })
+      if (thumbnailResult.error) throw thumbnailResult.error
+    } catch (error) {
+      await supabase.storage.from(bucket).remove([path])
+      throw new Error(error instanceof Error ? error.message : 'Could not create profile thumbnail')
+    }
+  }
   return result.data.path
 }
 
@@ -273,8 +284,25 @@ async function optimizeImage(file: File, maxDimension: number) {
   canvas.height = Math.max(1, Math.round(image.height * scale))
   canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
   image.close()
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not resize image')), 'image/webp', 0.84))
-  return new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+  return canvasFile(canvas, file.name, 0.84)
+}
+
+async function createThumbnail(file: File) {
+  const image = await createImageBitmap(file)
+  const side = Math.min(image.width, image.height)
+  const sourceX = Math.round((image.width - side) / 2)
+  const sourceY = Math.round((image.height - side) / 2)
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  canvas.getContext('2d')?.drawImage(image, sourceX, sourceY, side, side, 0, 0, 256, 256)
+  image.close()
+  return canvasFile(canvas, file.name, 0.78)
+}
+
+async function canvasFile(canvas: HTMLCanvasElement, fileName: string, quality: number) {
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not resize image')), 'image/webp', quality))
+  return new File([blob], fileName.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
 }
 
 export async function scanReceipt(file: File) {

@@ -22,6 +22,15 @@ export function publicImageUrl(bucket: string, path: string | null) {
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
 }
 
+export function thumbnailPath(path: string) {
+  const extensionIndex = path.lastIndexOf('.')
+  return `${extensionIndex > path.lastIndexOf('/') ? path.slice(0, extensionIndex) : path}.thumb.webp`
+}
+
+export function publicThumbnailUrl(bucket: string, path: string | null) {
+  return path ? publicImageUrl(bucket, thumbnailPath(path)) : null
+}
+
 export async function signedReceiptUrl(path: string) {
   const { data, error } = await supabase.storage.from('payment-receipts').createSignedUrl(path, 300)
   if (error) throw error

@@ -59,8 +59,19 @@ export function EmptyState({ title, message, icon: EmptyIcon }: { title: string;
   )
 }
 
-export function PersonAvatar({ name, src, size = 'md', onClick }: { name: string; src?: string | null; size?: string | number; onClick?: () => void }) {
-  return <Avatar className={onClick ? 'photo-avatar-clickable' : undefined} src={src} name={name} color="orange" radius="xl" size={size} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') onClick() } : undefined} />
+export function PersonAvatar({ name, src, thumbnailSrc, size = 'md', onClick }: { name: string; src?: string | null; thumbnailSrc?: string | null; size?: string | number; onClick?: () => void }) {
+  const optimizedSrc = thumbnailSrc || profileThumbnailUrl(src)
+  return <Avatar className={onClick ? 'photo-avatar-clickable' : undefined} src={optimizedSrc || src} name={name} color="orange" radius="xl" size={size} imageProps={{ loading: 'lazy', decoding: 'async', fetchPriority: 'low', onError: src && optimizedSrc ? (event) => { event.currentTarget.onerror = null; event.currentTarget.src = src } : undefined }} onClick={onClick} role={onClick ? 'button' : undefined} aria-label={onClick ? `View photo of ${name}` : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick() } } : undefined} />
+}
+
+function profileThumbnailUrl(src?: string | null) {
+  if (!src) return null
+  const queryIndex = src.indexOf('?')
+  const base = queryIndex === -1 ? src : src.slice(0, queryIndex)
+  const query = queryIndex === -1 ? '' : src.slice(queryIndex)
+  const extensionIndex = base.lastIndexOf('.')
+  const path = extensionIndex > base.lastIndexOf('/') ? base.slice(0, extensionIndex) : base
+  return `${path}.thumb.webp${query}`
 }
 
 export function PhotoLightbox({ src, name, opened, onClose }: { src: string | null; name: string; opened: boolean; onClose: () => void }) {
