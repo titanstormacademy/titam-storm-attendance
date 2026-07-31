@@ -90,7 +90,7 @@ export default function App() {
   }
 
   if (!isSupabaseConfigured) return <ConfigurationRequired />
-  if (authLoading) return <Center h="100vh"><Stack align="center"><ThemeIcon size={64} radius={20}><IconBallBasketball size={36} /></ThemeIcon><Text fw={700}>Loading Titan Storm…</Text></Stack></Center>
+  if (authLoading) return <Center h="100vh"><Stack align="center"><ThemeIcon size={64} radius={20}><IconBallBasketball size={36} /></ThemeIcon><Text fw={700}>{user ? 'Completing sign-in…' : 'Loading Titan Storm…'}</Text></Stack></Center>
   if (!user) return <LoginPage />
   if (!profile) return <Center h="100vh"><Alert color="red" icon={<IconAlertCircle size={18} />}>Your user profile could not be loaded. Ask an administrator to verify the database migration.</Alert></Center>
   if (!branchesQuery.isLoading && !activeBranches.length) return <Center h="100vh"><Paper p="xl" radius="lg" withBorder ta="center"><IconBuilding size={36} /><Title order={3} mt="md">No branch access yet</Title><Text c="dimmed" maw={420} mt="xs">Your account is ready, but an administrator must assign you to at least one branch.</Text><Button mt="lg" variant="light" onClick={signOut}>Sign out</Button></Paper></Center>

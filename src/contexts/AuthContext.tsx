@@ -16,6 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function applySession(nextSession: Session | null) {
       if (!active) return
+      if (nextSession?.user) setLoading(true)
       setSession(nextSession)
       if (simpleLoginInProgress.current && nextSession?.user?.is_anonymous) return
       if (!nextSession?.user) {
@@ -48,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     async signInWithName(name, password) {
       simpleLoginInProgress.current = true
+      setLoading(true)
+      setProfile(null)
       try {
         const anonymous = await supabase.auth.signInAnonymously({ options: { data: { full_name: name } } })
         if (anonymous.error) throw anonymous.error
@@ -55,8 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextProfile = await loginWithSimpleAccess(name, password)
         setSession(anonymous.data.session)
         setProfile(nextProfile)
+        setLoading(false)
       } catch (error) {
         await supabase.auth.signOut({ scope: 'local' })
+        setSession(null)
+        setProfile(null)
+        setLoading(false)
         throw error
       } finally {
         simpleLoginInProgress.current = false
