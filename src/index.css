@@ -394,6 +394,109 @@ select {
   backdrop-filter: blur(16px);
 }
 
+.login-kiosk-page {
+  min-height: 100dvh;
+  place-items: center;
+  padding: 28px 16px;
+  background: radial-gradient(circle at 50% 16%, #1b2a4a 0%, #101b33 42%, #0d1526 100%);
+}
+
+.login-kiosk-shell {
+  width: min(100%, 390px);
+}
+
+.login-kiosk-brand {
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.login-kiosk-name {
+  color: white;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.login-kiosk-tagline {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.login-kiosk-card {
+  padding: 28px 24px 24px;
+  background: white;
+  border: 0;
+  box-shadow: 0 28px 60px -28px rgba(0, 0, 0, 0.65);
+}
+
+.login-crest-badge {
+  display: grid;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 22px;
+  place-items: center;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e8ee;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 8px 22px -12px rgba(13, 21, 38, 0.55);
+}
+
+.login-crest-badge img {
+  width: 100%;
+  height: 100%;
+}
+
+.login-kiosk-input .mantine-InputWrapper-label {
+  color: #33456f;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.login-kiosk-input .mantine-InputWrapper-label small {
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.login-kiosk-input .mantine-Input-input {
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.login-enter-button {
+  min-height: 44px;
+  margin-top: 8px;
+  background: #e93243;
+  box-shadow: 0 10px 24px -14px rgba(233, 50, 67, 0.75);
+}
+
+.login-enter-button:hover {
+  background: #ce2637;
+}
+
+.login-access-hint {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.login-recovery-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #d4531f;
+}
+
 .class-picker {
   display: grid;
   grid-template-columns: 38px 1fr;
