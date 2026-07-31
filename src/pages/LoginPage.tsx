@@ -42,7 +42,7 @@ export function LoginPage() {
   return <Box className="login-page login-kiosk-page">
     <Box className="login-kiosk-shell">
       <Box className="login-kiosk-brand">
-        <Text className="login-kiosk-name">Titan Storm</Text>
+        <Text className="login-kiosk-name"><span>Titan</span><strong>Storm</strong></Text>
         <Text className="login-kiosk-tagline">Basketball Academy</Text>
       </Box>
 

@@ -406,23 +406,55 @@ select {
 }
 
 .login-kiosk-brand {
-  margin-bottom: 22px;
+  display: grid;
+  margin-bottom: 24px;
+  place-items: center;
   text-align: center;
 }
 
+.login-kiosk-brand::after {
+  content: '';
+  width: 38px;
+  height: 3px;
+  margin-top: 11px;
+  border-radius: 999px;
+  background: #f26522;
+  box-shadow: 0 5px 14px rgba(242, 101, 34, 0.48);
+}
+
 .login-kiosk-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.18em;
   color: white;
   font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-  font-size: 1.65rem;
+  font-size: 2.15rem;
+  font-style: italic;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.015em;
+  line-height: 0.92;
+  text-transform: uppercase;
+  transform: skewX(-3deg);
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.login-kiosk-name span {
+  font-weight: 600;
+}
+
+.login-kiosk-name strong {
+  color: #ff7f43;
+  font-weight: 700;
 }
 
 .login-kiosk-tagline {
-  margin-top: 2px;
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
