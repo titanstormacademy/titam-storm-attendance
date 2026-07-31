@@ -42,6 +42,7 @@ const navigation: NavItem[] = [
 export default function App() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
   const [page, setPage] = useState<PageKey>('dashboard')
+  const [studentCreateRequest, setStudentCreateRequest] = useState(0)
   const [navbarOpened, navbar] = useDisclosure(false)
   const [branchId, setBranchId] = useState<number | null>(() => {
     const stored = localStorage.getItem('titan-storm-branch')
@@ -79,6 +80,12 @@ export default function App() {
 
   function navigate(nextPage: PageKey) {
     setPage(nextPage)
+    navbar.close()
+  }
+
+  function registerStudentFromAttendance() {
+    setStudentCreateRequest((current) => current + 1)
+    setPage('students')
     navbar.close()
   }
 
@@ -138,7 +145,7 @@ export default function App() {
           {dataQuery.isLoading || !dataQuery.data ? <PageLoader /> : <Suspense fallback={<PageLoader />}><Box key={`${page}-${branchId}`} className="page-transition">{renderPage(page, {
             branchId: branchId!, branchName: activeBranch?.name || '', data: dataQuery.data, isAdmin: Boolean(isAdmin),
             onChanged: async () => { await dataQuery.refetch() }, refreshAll,
-            navigate, branches, settings: settingsQuery.data || { academy_name: 'Titan Storm', logo_path: null, default_branch_id: branchId },
+            navigate, registerStudentFromAttendance, studentCreateRequest, onStudentCreateHandled: () => setStudentCreateRequest(0), branches, settings: settingsQuery.data || { academy_name: 'Titan Storm', logo_path: null, default_branch_id: branchId },
           })}</Box></Suspense>}
         </Box>
       </AppShell.Main>
@@ -159,14 +166,17 @@ interface PageProps {
   onChanged: () => Promise<unknown>
   refreshAll: () => Promise<void>
   navigate: (page: PageKey) => void
+  registerStudentFromAttendance: () => void
+  studentCreateRequest: number
+  onStudentCreateHandled: () => void
   branches: Awaited<ReturnType<typeof getBranches>>
   settings: Awaited<ReturnType<typeof getAcademySettings>>
 }
 
 function renderPage(page: PageKey, props: PageProps) {
   switch (page) {
-    case 'attendance': return <AttendancePage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} onChanged={props.onChanged} />
-    case 'students': return <StudentsPage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} onChanged={props.onChanged} />
+    case 'attendance': return <AttendancePage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} onRegisterStudent={props.registerStudentFromAttendance} />
+    case 'students': return <StudentsPage branchId={props.branchId} data={props.data} isAdmin={props.isAdmin} createRequest={props.studentCreateRequest} onCreateHandled={props.onStudentCreateHandled} onChanged={props.onChanged} />
     case 'classes': return <ClassesPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'payments': return <PaymentsPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'coaches': return <CoachesPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />

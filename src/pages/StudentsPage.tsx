@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import { ActionIcon, Badge, Box, Button, Checkbox, FileButton, Grid, Group, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Tabs, Text, TextInput, ThemeIcon } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
@@ -14,7 +14,7 @@ const blankStudent: Partial<Student> & { name: string } = {
   name: '', nric: '', gender: '', date_of_birth: null, height: '', school: '', tshirt_size: '', student_phone: '', parent_name: '', parent_contact: '', email: '', father_height: '', mother_height: '', monthly_fee: null, level: '', status: 'Active',
 }
 
-export function StudentsPage({ branchId, data, isAdmin, onChanged }: { branchId: number; data: BootstrapData; isAdmin: boolean; onChanged: () => Promise<unknown> }) {
+export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateHandled, onChanged }: { branchId: number; data: BootstrapData; isAdmin: boolean; createRequest: number; onCreateHandled: () => void; onChanged: () => Promise<unknown> }) {
   const [opened, { open, close }] = useDisclosure(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<string>('All')
@@ -27,6 +27,19 @@ export function StudentsPage({ branchId, data, isAdmin, onChanged }: { branchId:
   const [photo, setPhoto] = useState<File | null>(null)
   const [photoView, setPhotoView] = useState<{ src: string | null; name: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const handledCreateRequest = useRef(0)
+
+  useEffect(() => {
+    if (!isAdmin || createRequest <= handledCreateRequest.current) return
+    handledCreateRequest.current = createRequest
+    setForm({ ...blankStudent, status: 'Trial' })
+    setClassIds([])
+    setEnrollmentDates({})
+    setAttendance([])
+    setPhoto(null)
+    open()
+    onCreateHandled()
+  }, [createRequest, isAdmin, onCreateHandled, open])
 
   const filtered = useMemo(() => data.students.filter((student) => {
     const needle = search.toLowerCase()
