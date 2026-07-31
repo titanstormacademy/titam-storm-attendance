@@ -261,10 +261,20 @@ select {
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.3s ease;
 }
 
+.student-directory-card.read-only {
+  cursor: default;
+}
+
 .student-directory-card:hover {
   transform: translateY(-4px);
   border-color: #ffc9aa;
   box-shadow: 0 18px 34px -22px rgba(16, 27, 51, 0.55) !important;
+}
+
+.student-directory-card.read-only:hover {
+  transform: none;
+  border-color: #e5e8ee;
+  box-shadow: 0 8px 26px -20px rgba(16, 27, 51, 0.5) !important;
 }
 
 .student-directory-name {

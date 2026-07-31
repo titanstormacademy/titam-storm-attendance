@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSelect, NumberInput, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSelect, NumberInput, Paper, PasswordInput, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconBuilding, IconDeviceFloppy, IconEdit, IconPhoto, IconPlus, IconTrash, IconUserShield } from '@tabler/icons-react'
-import { getBranchMemberships, getHeadCoachRates, getProfiles, replaceHeadCoachRates, saveBranch, updateAcademySettings, updateProfileAccess, uploadImage } from '../lib/api'
+import { IconBuilding, IconDeviceFloppy, IconEdit, IconKey, IconPhoto, IconPlus, IconTrash, IconUserShield } from '@tabler/icons-react'
+import { getBranchMemberships, getHeadCoachRates, getProfiles, replaceHeadCoachRates, saveBranch, setSharedAdminPassword, updateAcademySettings, updateProfileAccess, uploadImage } from '../lib/api'
 import { PageHeader } from '../components/ui'
 import type { Branch, HeadCoachRate, Profile } from '../types/models'
 
@@ -20,6 +20,8 @@ export function SettingsPage({ branches, settings, onChanged }: {
   const [rates, setRates] = useState<HeadCoachRate[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [memberships, setMemberships] = useState<Array<{ user_id: string; branch_id: number }>>([])
+  const [adminPassword, setAdminPassword] = useState('')
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -41,6 +43,22 @@ export function SettingsPage({ branches, settings, onChanged }: {
       branchModal.close()
       notifications.show({ color: 'green', message: 'Branch saved' })
       await onChanged()
+    } catch (error) {
+      notifications.show({ color: 'red', message: errorMessage(error) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveAdminPassword() {
+    if (adminPassword.length < 8) { notifications.show({ color: 'red', message: 'Admin password must contain at least 8 characters' }); return }
+    if (adminPassword !== confirmAdminPassword) { notifications.show({ color: 'red', message: 'Admin passwords do not match' }); return }
+    setSaving(true)
+    try {
+      await setSharedAdminPassword(adminPassword)
+      setAdminPassword('')
+      setConfirmAdminPassword('')
+      notifications.show({ color: 'green', message: 'Shared admin password updated' })
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
@@ -102,6 +120,11 @@ export function SettingsPage({ branches, settings, onChanged }: {
               <Stack><TextInput label="Academy name" value={academyName} onChange={(event) => setAcademyName(event.currentTarget.value)} /><Select label="Default branch" value={defaultBranchId} onChange={setDefaultBranchId} data={branches.filter((branch) => branch.status === 'Active').map((branch) => ({ value: String(branch.id), label: branch.name }))} /><FileInput label="Logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" value={logo} onChange={setLogo} clearable /><Button leftSection={<IconDeviceFloppy size={17} />} onClick={saveBrand} loading={saving}>Save branding</Button></Stack>
             </Paper>
             <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>
+              <Group mb="xs"><IconKey size={22} /><Title order={4}>Shared admin password</Title></Group>
+              <Text c="dimmed" size="sm" mb="lg">Administrators enter this password with their name. It is securely hashed and cannot be viewed after saving.</Text>
+              <Stack><PasswordInput label="New admin password" value={adminPassword} onChange={(event) => setAdminPassword(event.currentTarget.value)} minLength={8} autoComplete="new-password" /><PasswordInput label="Confirm password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.currentTarget.value)} minLength={8} autoComplete="new-password" /><Button leftSection={<IconDeviceFloppy size={17} />} onClick={saveAdminPassword} loading={saving} disabled={!adminPassword || !confirmAdminPassword}>Save admin password</Button></Stack>
+            </Paper>
+            <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>
               <Group justify="space-between" mb="lg"><Group><IconBuilding size={22} /><Title order={4}>Branches</Title></Group><Button size="xs" variant="light" leftSection={<IconPlus size={15} />} onClick={() => editBranch()}>Add</Button></Group>
               <Stack gap="sm">{branches.map((branch) => <Paper key={branch.id} p="md" radius="md" withBorder><Group justify="space-between" wrap="nowrap"><Box style={{ minWidth: 0 }}><Text fw={700} truncate>{branch.name}</Text><Text size="sm" c="dimmed" truncate>{branch.subtitle || 'No location subtitle'}</Text></Box><Group gap={4} wrap="nowrap"><Badge color={branch.status === 'Active' ? 'green' : 'gray'} variant="light">{branch.status}</Badge><ActionIcon aria-label={`Edit ${branch.name}`} size={44} variant="subtle" onClick={() => editBranch(branch)}><IconEdit size={16} /></ActionIcon></Group></Group></Paper>)}</Stack>
             </Paper>
@@ -111,7 +134,7 @@ export function SettingsPage({ branches, settings, onChanged }: {
           <Stack>
             <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>
               <Group mb="xs"><IconUserShield size={22} /><Title order={4}>Team access</Title></Group>
-              <Text c="dimmed" size="sm" mb="lg">New users sign up first. Assign staff to one or more branches; admins can access all branches.</Text>
+              <Text c="dimmed" size="sm" mb="lg">Emergency email accounts are managed here. Name-only basic users automatically receive limited attendance access to active branches.</Text>
               <Stack>{profiles.map((profile) => <Paper key={profile.id} p="md" radius="md" withBorder><Grid align="end"><Grid.Col span={{ base: 12, md: 4 }}><Text fw={700}>{profile.full_name || 'Unnamed user'}</Text><Text size="xs" c="dimmed">{profile.id.slice(0, 8)}…</Text></Grid.Col><Grid.Col span={{ base: 12, sm: 4, md: 3 }}><Select label="Role" value={profile.role} onChange={(value) => setProfiles((current) => current.map((item) => item.id === profile.id ? { ...item, role: value as Profile['role'] } : item))} data={[{ value: 'staff', label: 'Staff' }, { value: 'admin', label: 'Admin' }]} /></Grid.Col><Grid.Col span={{ base: 12, sm: 8, md: 4 }}><MultiSelect label="Branches" disabled={profile.role === 'admin'} value={memberships.filter((item) => item.user_id === profile.id).map((item) => String(item.branch_id))} onChange={(values) => setUserBranches(profile.id, values)} data={branches.filter((branch) => branch.status === 'Active').map((branch) => ({ value: String(branch.id), label: branch.name }))} /></Grid.Col><Grid.Col span={{ base: 12, md: 1 }}><Button fullWidth variant="light" onClick={() => saveUser(profile)} loading={saving} leftSection={<IconDeviceFloppy size={17} />}>Save</Button></Grid.Col></Grid></Paper>)}</Stack>
             </Paper>
             <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>

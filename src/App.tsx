@@ -50,8 +50,8 @@ export default function App() {
   })
   const isAdmin = profile?.role === 'admin'
 
-  const branchesQuery = useQuery({ queryKey: ['branches', user?.id], queryFn: getBranches, enabled: Boolean(user) })
-  const settingsQuery = useQuery({ queryKey: ['academy-settings'], queryFn: getAcademySettings, enabled: Boolean(user) })
+  const branchesQuery = useQuery({ queryKey: ['branches', user?.id], queryFn: getBranches, enabled: Boolean(user && profile) })
+  const settingsQuery = useQuery({ queryKey: ['academy-settings'], queryFn: getAcademySettings, enabled: Boolean(user && profile) })
   const branches = branchesQuery.data || []
   const activeBranches = branches.filter((branch) => branch.status === 'Active')
 

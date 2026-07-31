@@ -28,6 +28,17 @@ export async function getProfile(userId: string) {
   return unwrap(await supabase.from('profiles').select('id,full_name,role').eq('id', userId).single()) as Profile
 }
 
+export async function loginWithSimpleAccess(name: string, password?: string) {
+  if (!password) return unwrap(await supabase.rpc('login_as_basic', { p_name: name })) as Profile
+  const result = unwrap(await supabase.rpc('login_with_shared_admin_password', { p_name: name, p_password: password })) as { ok: boolean; error?: string; profile?: Profile }
+  if (!result.ok || !result.profile) throw new Error(result.error || 'Admin login failed')
+  return result.profile
+}
+
+export async function setSharedAdminPassword(password: string) {
+  unwrap(await supabase.rpc('set_shared_admin_password', { p_password: password }))
+}
+
 export async function getBranches() {
   const data = unwrap(await supabase.from('branches').select('id,name,subtitle,status').order('name'))
   return data as Branch[]
@@ -42,6 +53,9 @@ export async function getAcademySettings() {
 }
 
 export async function getBootstrapData(branchId: number, includePayments: boolean): Promise<BootstrapData> {
+  if (!includePayments) {
+    return unwrap(await supabase.rpc('get_basic_bootstrap', { p_branch_id: branchId })) as BootstrapData
+  }
   const [studentsResult, coachesResult, classesResult, sessionsResult, enrollmentsResult, paymentsResult] = await Promise.all([
     supabase.from('students').select('*').eq('branch_id', branchId).order('name'),
     supabase.from('coaches').select('*').eq('branch_id', branchId).order('name'),
@@ -229,7 +243,7 @@ export async function updateAcademySettings(values: { academy_name?: string; log
 }
 
 export async function getProfiles() {
-  return (unwrap(await supabase.from('profiles').select('id,full_name,role').order('full_name')) || []) as Profile[]
+  return (unwrap(await supabase.from('profiles').select('id,full_name,role').eq('login_kind', 'account').order('full_name')) || []) as Profile[]
 }
 
 export async function getBranchMemberships() {
