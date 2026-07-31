@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Badge, Box, Button, Divider, Group, Modal, Paper, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, Divider, Group, Modal, Paper, ScrollArea, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconArrowLeft, IconCheck, IconChevronRight, IconSearch, IconTrash, IconUserPlus, IconUsers } from '@tabler/icons-react'
@@ -23,6 +23,8 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
   const [loading, setLoading] = useState(false)
   const [walkinOpened, walkinModal] = useDisclosure(false)
   const [walkinId, setWalkinId] = useState<string | null>(null)
+  const [walkinSearch, setWalkinSearch] = useState('')
+  const [walkinLevel, setWalkinLevel] = useState<string>('All')
   const [quickName, setQuickName] = useState('')
   const [quickPhone, setQuickPhone] = useState('')
   const [coachId, setCoachId] = useState<string | null>(null)
@@ -38,6 +40,11 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
   const visibleEnrolled = allEnrolled.filter((student) => student.name.toLowerCase().includes(search.toLowerCase()) && (level === 'All' || student.level === level))
   const walkins = data.students.filter((student) => !effectiveEnrollmentIds.has(student.id) && records.some((record) => record.student_id === student.id))
   const possibleWalkins = data.students.filter((student) => !effectiveEnrollmentIds.has(student.id) && student.status !== 'Inactive')
+  const filteredWalkins = possibleWalkins.filter((student) => {
+    const needle = walkinSearch.trim().toLowerCase()
+    return (!needle || [student.name, student.student_phone, student.parent_contact].some((value) => value?.toLowerCase().includes(needle)))
+      && (walkinLevel === 'All' || student.level === walkinLevel)
+  }).sort((a, b) => a.name.localeCompare(b.name))
   const present = records.filter((record) => record.status === 'Present')
   const breakdown = present.reduce((result, record) => {
     const student = data.students.find((item) => item.id === record.student_id)
@@ -84,6 +91,15 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
     setSearch('')
     setLevel('All')
     setScreen('detail')
+  }
+
+  function openWalkinPicker() {
+    setWalkinId(null)
+    setWalkinSearch('')
+    setWalkinLevel('All')
+    setQuickName('')
+    setQuickPhone('')
+    walkinModal.open()
   }
 
   async function selectSession(next: Session) {
@@ -238,12 +254,15 @@ export function AttendancePage({ branchId, data, isAdmin, onChanged }: { branchI
         </Box>
 
         <Box>
-          <Group justify="space-between" mb="xs"><Text className="attendance-section-label" mb={0}>Walk-ins</Text><Button size="xs" leftSection={<IconUserPlus size={15} />} onClick={walkinModal.open}>Add walk-in</Button></Group>
+          <Group justify="space-between" mb="xs"><Text className="attendance-section-label" mb={0}>Walk-ins</Text><Button size="xs" leftSection={<IconUserPlus size={15} />} onClick={openWalkinPicker}>Add walk-in</Button></Group>
           {walkins.length ? <Stack gap="xs">{walkins.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={records.find((record) => record.student_id === student.id)?.remarks || ''} onToggle={() => toggle(student)} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} onDelete={() => deleteWalkin(student.id)} />)}</Stack> : <Text size="sm" c="dimmed">No walk-ins recorded.</Text>}
         </Box>
       </Stack> : <EmptyState title="No sessions recorded" message="Create or generate a session from Classes, then return here." icon={IconUsers} />}
 
-      <Modal opened={walkinOpened} onClose={walkinModal.close} title="Add walk-in" centered><Stack><Select label="Existing student" placeholder="Search student" searchable value={walkinId} onChange={setWalkinId} data={possibleWalkins.map((student) => ({ value: String(student.id), label: `${student.name} · ${student.status}` }))} /><Button onClick={addWalkin} disabled={!walkinId} loading={loading}>Mark selected student present</Button><Divider label="or register a trial student" /><TextInput label="Student name" value={quickName} onChange={(event) => setQuickName(event.currentTarget.value)} /><TextInput label="Phone" value={quickPhone} onChange={(event) => setQuickPhone(event.currentTarget.value)} /><Button variant="light" onClick={addWalkin} disabled={!quickName.trim()} loading={loading}>Register and mark present</Button></Stack></Modal>
+      <Modal opened={walkinOpened} onClose={walkinModal.close} title="Add walk-in" size="md" centered><Stack gap="sm"><TextInput aria-label="Search walk-in students" leftSection={<IconSearch size={17} />} placeholder="Search by name or phone…" value={walkinSearch} onChange={(event) => setWalkinSearch(event.currentTarget.value)} /><Box className="walkin-level-filters">{['All', 'Beginner', 'Intermediate', 'Advanced'].map((item) => <button type="button" key={item} className={walkinLevel === item ? 'active' : ''} onClick={() => setWalkinLevel(item)}>{item}</button>)}</Box><ScrollArea h={310} type="auto" offsetScrollbars><Stack gap={4} pr="xs">{filteredWalkins.length ? filteredWalkins.map((student) => {
+        const selected = walkinId === String(student.id)
+        return <button type="button" key={student.id} className={`walkin-student-option ${selected ? 'selected' : ''}`} aria-pressed={selected} onClick={() => { setWalkinId(String(student.id)); setQuickName('') }}><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={46} /><Box flex={1} ta="left" style={{ minWidth: 0 }}><Text fw={700} size="sm" truncate>{student.name}</Text><Text size="xs" c="dimmed" truncate>{student.level || student.status}{student.student_phone ? ` · ${student.student_phone}` : ''}</Text></Box><Badge color={student.status === 'Trial' ? 'orange' : 'green'} variant="light">{student.status}</Badge></button>
+      }) : <Text c="dimmed" size="sm" ta="center" py="xl">No students match this search and level.</Text>}</Stack></ScrollArea><Button onClick={addWalkin} disabled={!walkinId} loading={loading}>Add selected student</Button><Divider label="Register new trial student" /><TextInput label="Student name" placeholder="Student name *" value={quickName} onChange={(event) => { setQuickName(event.currentTarget.value); setWalkinId(null) }} /><TextInput label="Phone" placeholder="Phone (optional)" value={quickPhone} onChange={(event) => setQuickPhone(event.currentTarget.value)} /><Button variant="light" onClick={addWalkin} disabled={!quickName.trim()} loading={loading}>Add & mark attendance</Button><Button variant="default" onClick={walkinModal.close}>Cancel</Button></Stack></Modal>
       <PhotoLightbox src={photoView?.src || null} name={photoView?.name || 'Student photo'} opened={Boolean(photoView)} onClose={() => setPhotoView(null)} />
     </>
   )

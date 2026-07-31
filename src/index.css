@@ -575,12 +575,99 @@ select {
   background: white;
 }
 
+.walkin-level-filters {
+  display: flex;
+  gap: 7px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.walkin-level-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.walkin-level-filters button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 1px solid #e5e8ee;
+  border-radius: 999px;
+  color: #64748b;
+  background: white;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.walkin-level-filters button.active {
+  color: white;
+  background: #b74117;
+  border-color: #b74117;
+}
+
+.walkin-student-option {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-bottom-color: #eef0f3;
+  border-radius: 12px;
+  color: inherit;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.walkin-student-option:hover {
+  background: #fafbfc;
+  border-color: #e5e8ee;
+}
+
+.walkin-student-option.selected {
+  background: #fff4ed;
+  border-color: #f26522;
+  box-shadow: 0 0 0 2px rgba(242, 101, 34, 0.1);
+}
+
 .report-class-row + .report-class-row {
   margin-top: 18px;
 }
 
 .report-student-summary {
   max-width: 820px;
+  overflow: hidden;
+}
+
+.report-summary-toggle {
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  color: inherit;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-summary-toggle:hover {
+  background: #fafbfc;
+}
+
+.report-summary-toggle svg {
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+
+.report-summary-toggle svg.expanded {
+  transform: rotate(180deg);
+}
+
+.report-summary-detail {
+  padding: 0 16px 16px;
+  animation: page-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .report-total {
