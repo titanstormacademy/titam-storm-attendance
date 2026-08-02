@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
+import { ActionIcon, Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { IconAlertCircle, IconBallBasketball, IconBuilding, IconCalendarEvent, IconCash, IconChartBar, IconChevronDown, IconClipboardCheck, IconLogout, IconMenu2, IconMoon, IconSchool, IconSettings, IconSun, IconUsers, type Icon } from '@tabler/icons-react'
@@ -223,13 +223,14 @@ export default function App() {
           </Group>
           <Group className="app-header-actions" gap="md" wrap="nowrap">
             <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onPointerDown={prepareBranchPicker} onDropdownOpen={() => requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))} onChange={changeBranch} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
+            <ActionIcon className="header-theme-toggle" aria-label={colorScheme === 'dark' ? 'Use light mode' : 'Use dark mode'} variant="subtle" color="gray" size={44} radius="xl" onClick={toggleColorScheme}>{colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}</ActionIcon>
             <Menu position="bottom-end" shadow="lg">
               <Menu.Target>
                 <Button className="profile-menu-trigger" aria-label={`Open account menu for ${profile.full_name}`} variant="subtle" color="dark" px="xs" rightSection={<Box visibleFrom="sm"><IconChevronDown size={14} /></Box>}>
                   <Group gap="xs" wrap="nowrap"><Avatar name={profile.full_name} color="orange" size={32} /><Box visibleFrom="sm" ta="left"><Text size="sm" fw={700} lh={1}>{profile.full_name}</Text><Text size="xs" c="dimmed" mt={4}>{isAdmin ? 'Administrator' : 'Staff'}</Text></Box></Group>
                 </Button>
               </Menu.Target>
-              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={colorScheme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />} onClick={toggleColorScheme}>{colorScheme === 'dark' ? 'Light mode' : 'Dark mode'}</Menu.Item><Menu.Divider /><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={guardedSignOut}>Sign out</Menu.Item></Menu.Dropdown>
+              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={guardedSignOut}>Sign out</Menu.Item></Menu.Dropdown>
             </Menu>
           </Group>
         </Group>

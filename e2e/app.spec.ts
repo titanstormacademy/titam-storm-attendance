@@ -82,8 +82,7 @@ test('dark mode can be selected before login and persists', async ({ page }) => 
 
 test('account dark mode persists and keeps student profiles dark', async ({ page, isMobile }) => {
   await login(page)
-  await page.getByRole('button', { name: /Open account menu/ }).click()
-  await page.getByRole('menuitem', { name: 'Dark mode' }).click()
+  await page.getByRole('button', { name: 'Use dark mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
   const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
   await navigation.getByText('Students', { exact: true }).click()

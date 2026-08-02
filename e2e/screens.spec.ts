@@ -134,8 +134,7 @@ test('every admin screen renders without horizontal overflow in light and dark m
     if (screen.label !== 'Overview') await navigate(page, Boolean(isMobile), screen.label, screen.heading)
     await expectNoHorizontalOverflow(page)
   }
-  await page.getByRole('button', { name: /Open account menu/ }).click()
-  await page.getByRole('menuitem', { name: 'Dark mode' }).click()
+  await page.getByRole('button', { name: 'Use dark mode' }).click()
   for (const screen of screens) {
     await navigate(page, Boolean(isMobile), screen.label, screen.heading)
     await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')

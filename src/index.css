@@ -80,6 +80,15 @@ select {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.header-theme-toggle {
+  flex: 0 0 auto;
+  color: white;
+}
+
+.header-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .app-navbar {
   background: linear-gradient(180deg, #101b33 0%, #0d1526 100%);
   border: 0;
