@@ -311,7 +311,7 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
   return (
     <>
       <Box className="attendance-detail-header">
-        <ActionIcon aria-label="Back to attendance" variant="subtle" color="dark" size={44} onClick={closeDetail}><IconArrowLeft size={24} /></ActionIcon>
+        <ActionIcon aria-label="Back to attendance" variant="subtle" color="gray" size={44} onClick={closeDetail}><IconArrowLeft size={24} /></ActionIcon>
         <Box><Title order={2}>{academyClass?.label || 'Attendance'}</Title><Text c="dimmed" size="sm">{mode === 'history' ? 'Past Records' : session ? dayjs(session.session_date).format('dddd, D MMMM YYYY') : 'Today'}</Text></Box>
       </Box>
 

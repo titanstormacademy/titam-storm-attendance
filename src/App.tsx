@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title } from '@mantine/core'
+import { Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
-import { IconAlertCircle, IconBallBasketball, IconBuilding, IconCalendarEvent, IconCash, IconChartBar, IconChevronDown, IconClipboardCheck, IconLogout, IconMenu2, IconSchool, IconSettings, IconUsers, type Icon } from '@tabler/icons-react'
+import { IconAlertCircle, IconBallBasketball, IconBuilding, IconCalendarEvent, IconCash, IconChartBar, IconChevronDown, IconClipboardCheck, IconLogout, IconMenu2, IconMoon, IconSchool, IconSettings, IconSun, IconUsers, type Icon } from '@tabler/icons-react'
 import { useAuth } from './contexts/useAuth'
 import { getAcademySettings, getBootstrapData, getBranches } from './lib/api'
 import { isSupabaseConfigured, publicImageUrl } from './lib/supabase'
@@ -42,6 +42,8 @@ const navigation: NavItem[] = [
 
 export default function App() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
+  const { setColorScheme } = useMantineColorScheme()
+  const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true })
   const { confirmLeave } = useNavigationGuardContext()
   const [page, setPage] = useState<PageKey>(() => pageFromHistory())
   const pageRef = useRef(page)
@@ -70,6 +72,10 @@ export default function App() {
   }, [activeBranches, branchId, settingsQuery.data?.default_branch_id])
 
   useEffect(() => { pageRef.current = page }, [page])
+
+  useEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colorScheme === 'dark' ? '#0b1220' : '#101b33')
+  }, [colorScheme])
 
   useEffect(() => {
     window.history.replaceState({ ...window.history.state, titanPage: pageRef.current }, '', window.location.href)
@@ -156,6 +162,10 @@ export default function App() {
     if (confirmLeave()) await signOut()
   }
 
+  function toggleColorScheme() {
+    setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')
+  }
+
   function toggleNavigation() {
     if (navbarOpened) {
       if (window.history.state?.mobileNav) window.history.back()
@@ -208,7 +218,7 @@ export default function App() {
                   <Group gap="xs" wrap="nowrap"><Avatar name={profile.full_name} color="orange" size={32} /><Box visibleFrom="sm" ta="left"><Text size="sm" fw={700} lh={1}>{profile.full_name}</Text><Text size="xs" c="dimmed" mt={4}>{isAdmin ? 'Administrator' : 'Staff'}</Text></Box></Group>
                 </Button>
               </Menu.Target>
-              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={guardedSignOut}>Sign out</Menu.Item></Menu.Dropdown>
+              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={colorScheme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />} onClick={toggleColorScheme}>{colorScheme === 'dark' ? 'Light mode' : 'Dark mode'}</Menu.Item><Menu.Divider /><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={guardedSignOut}>Sign out</Menu.Item></Menu.Dropdown>
             </Menu>
           </Group>
         </Group>

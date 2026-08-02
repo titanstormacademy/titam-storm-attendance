@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Alert, Anchor, Box, Button, Collapse, Divider, Image, Paper, PasswordInput, Stack, Text, TextInput } from '@mantine/core'
-import { IconAlertCircle, IconKey } from '@tabler/icons-react'
+import { ActionIcon, Alert, Anchor, Box, Button, Collapse, Divider, Image, Paper, PasswordInput, Stack, Text, TextInput, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
+import { IconAlertCircle, IconKey, IconMoon, IconSun } from '@tabler/icons-react'
 import { useAuth } from '../contexts/useAuth'
 
 export function LoginPage() {
   const { signInWithName, signIn } = useAuth()
+  const { setColorScheme } = useMantineColorScheme()
+  const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true })
   const [name, setName] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [emergencyOpen, setEmergencyOpen] = useState(false)
@@ -40,6 +42,7 @@ export function LoginPage() {
   }
 
   return <Box className="login-page login-kiosk-page">
+    <ActionIcon className="login-theme-toggle" aria-label={colorScheme === 'dark' ? 'Use light mode' : 'Use dark mode'} variant="subtle" color="gray" size={44} radius="xl" onClick={() => setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')}>{colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}</ActionIcon>
     <Box className="login-kiosk-shell">
       <Box className="login-kiosk-brand">
         <Text className="login-kiosk-name"><span>Titan</span><strong>Storm</strong></Text>

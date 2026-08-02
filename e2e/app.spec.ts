@@ -69,6 +69,30 @@ test('renders the existing shared-access login without horizontal overflow', asy
   expect(Number.parseFloat(fontSize)).toBeGreaterThanOrEqual(16)
 })
 
+test('dark mode can be selected before login and persists', async ({ page }) => {
+  await mockBackend(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Use dark mode' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
+  await expect(page.locator('.login-kiosk-card')).not.toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
+  await expect(page.getByRole('button', { name: 'Use light mode' })).toBeVisible()
+})
+
+test('account dark mode persists and keeps student profiles dark', async ({ page, isMobile }) => {
+  await login(page)
+  await page.getByRole('button', { name: /Open account menu/ }).click()
+  await page.getByRole('menuitem', { name: 'Dark mode' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: /Basic Student/ }).click()
+  await expect(page.getByRole('dialog')).not.toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
+})
+
 test('browser Back returns through top-level app navigation', async ({ page, isMobile }) => {
   await login(page)
   const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })

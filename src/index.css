@@ -411,6 +411,20 @@ select {
   background: radial-gradient(circle at 50% 16%, #1b2a4a 0%, #101b33 42%, #0d1526 100%);
 }
 
+.login-theme-toggle {
+  position: fixed;
+  z-index: 2;
+  top: max(14px, env(safe-area-inset-top));
+  right: 14px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.login-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .login-kiosk-shell {
   width: calc(var(--viewport-width) - 32px);
   max-width: 390px;
@@ -1322,6 +1336,129 @@ select {
     width: 100% !important;
     flex-basis: 100%;
   }
+}
+
+[data-mantine-color-scheme='dark'] {
+  color: #e7edf7;
+  background: #0b1220;
+}
+
+[data-mantine-color-scheme='dark'] body {
+  color: #e7edf7;
+  background:
+    radial-gradient(circle at 90% -10%, rgba(242, 101, 34, 0.12), transparent 32%),
+    #0b1220;
+}
+
+[data-mantine-color-scheme='dark'] .page-header h2,
+[data-mantine-color-scheme='dark'] .mantine-Title-root,
+[data-mantine-color-scheme='dark'] .attendance-detail-header h2,
+[data-mantine-color-scheme='dark'] .stat-value,
+[data-mantine-color-scheme='dark'] .attendance-summary-value {
+  color: #edf2f8;
+}
+
+[data-mantine-color-scheme='dark'] .app-main .mantine-Paper-root {
+  border-color: #2b3950;
+  box-shadow: 0 10px 30px -22px rgba(0, 0, 0, 0.9);
+}
+
+[data-mantine-color-scheme='dark'] .student-filter-panel,
+[data-mantine-color-scheme='dark'] .attendance-summary-card,
+[data-mantine-color-scheme='dark'] .attendance-tools,
+[data-mantine-color-scheme='dark'] .attendance-date-pills button,
+[data-mantine-color-scheme='dark'] .walkin-level-filters button,
+[data-mantine-color-scheme='dark'] .walkin-student-option,
+[data-mantine-color-scheme='dark'] .report-summary-toggle,
+[data-mantine-color-scheme='dark'] .report-sticky-name,
+[data-mantine-color-scheme='dark'] .login-card,
+[data-mantine-color-scheme='dark'] .login-kiosk-card {
+  color: #e7edf7;
+  background: #131d2e;
+  border-color: #2b3950;
+}
+
+[data-mantine-color-scheme='dark'] .student-directory-card:hover,
+[data-mantine-color-scheme='dark'] .attendance-class-card:hover {
+  border-color: #9a4a25;
+  box-shadow: 0 20px 36px -24px rgba(0, 0, 0, 0.95) !important;
+}
+
+[data-mantine-color-scheme='dark'] .student-enrollment-row.selected,
+[data-mantine-color-scheme='dark'] .class-picker.active,
+[data-mantine-color-scheme='dark'] .walkin-student-option.selected,
+[data-mantine-color-scheme='dark'] .walkin-registration-handoff,
+[data-mantine-color-scheme='dark'] .mobile-nav button.active {
+  color: #ffb58d;
+  background: #332116;
+  border-color: #9a4a25 !important;
+}
+
+[data-mantine-color-scheme='dark'] .attendance-row.present,
+[data-mantine-color-scheme='dark'] .attendance-summary-card.present,
+[data-mantine-color-scheme='dark'] .attendance-student-card.present {
+  background: #11291f;
+  border-color: #1f6b46 !important;
+}
+
+[data-mantine-color-scheme='dark'] .class-picker,
+[data-mantine-color-scheme='dark'] .attendance-date-pills button,
+[data-mantine-color-scheme='dark'] .attendance-section-label,
+[data-mantine-color-scheme='dark'] .attendance-level-label,
+[data-mantine-color-scheme='dark'] .walkin-level-filters button,
+[data-mantine-color-scheme='dark'] .report-summary-toggle svg,
+[data-mantine-color-scheme='dark'] .login-access-hint,
+[data-mantine-color-scheme='dark'] .login-kiosk-input .mantine-InputWrapper-label {
+  color: #aab7ca;
+}
+
+[data-mantine-color-scheme='dark'] .class-picker:hover,
+[data-mantine-color-scheme='dark'] .walkin-student-option:hover,
+[data-mantine-color-scheme='dark'] .report-summary-toggle:hover {
+  background: #182438;
+  border-color: #34445e;
+}
+
+[data-mantine-color-scheme='dark'] .attendance-grid-table th,
+[data-mantine-color-scheme='dark'] .attendance-grid-table thead .report-sticky-name {
+  color: #e7edf7;
+  background: #1a2639;
+}
+
+[data-mantine-color-scheme='dark'] .mobile-nav {
+  border-color: #34445e;
+  background: rgba(19, 29, 46, 0.96);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.48);
+}
+
+[data-mantine-color-scheme='dark'] .mobile-nav button {
+  color: #9aa8bc;
+}
+
+[data-mantine-color-scheme='dark'] .mantine-Modal-header {
+  color: #edf2f8;
+  background: #131d2e;
+  border-bottom-color: #2b3950;
+}
+
+[data-mantine-color-scheme='dark'] .profile-camera-button {
+  border-color: #131d2e;
+}
+
+[data-mantine-color-scheme='dark'] .login-page {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(245, 138, 35, 0.12), transparent 28%),
+    radial-gradient(circle at 90% 85%, rgba(45, 93, 158, 0.15), transparent 28%),
+    #0b1220;
+}
+
+[data-mantine-color-scheme='dark'] .login-brand-panel h1 {
+  color: #edf2f8;
+}
+
+[data-mantine-color-scheme='dark'] .login-crest-badge {
+  background: #f8fafc;
+  border-color: #34445e;
 }
 
 @media (max-width: 22.5em) {
