@@ -207,7 +207,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
 
     {isAdmin && <ActionIcon className="student-fab" aria-label="Add student" size={58} radius="xl" color="orange" onClick={() => showProfile()}><IconPlus size={26} /></ActionIcon>}
 
-    <ResponsiveModal classNames={{ inner: 'student-profile-modal-inner', content: 'student-profile-modal-content' }} transitionProps={{ transition: 'fade', duration: 0 }} opened={opened} onClose={guardedClose} title={form.id ? form.name : 'Add student'} size="lg" centered closeOnClickOutside={!saving} closeOnEscape={!saving}>
+    <ResponsiveModal classNames={{ inner: 'student-profile-modal-inner', content: 'student-profile-modal-content', body: 'student-profile-modal-body' }} transitionProps={{ transition: 'fade', duration: 0 }} opened={opened} onClose={guardedClose} title={form.id ? form.name : 'Add student'} size="lg" centered closeOnClickOutside={!saving} closeOnEscape={!saving}>
       <Stack>
         <Group wrap="nowrap" className="student-profile-hero">
           <Box className="profile-photo-editor">

@@ -1266,13 +1266,24 @@ select {
     position: fixed !important;
     top: var(--viewport-top) !important;
     left: var(--viewport-left) !important;
+    display: flex;
     width: var(--viewport-width) !important;
     max-width: var(--viewport-width) !important;
     height: var(--viewport-height) !important;
     min-height: 0 !important;
     max-height: var(--viewport-height) !important;
+    flex-direction: column;
     border-radius: 0 !important;
     overflow: hidden;
+  }
+
+  .student-profile-modal-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   body:has(.mantine-Modal-overlay) .mobile-nav {

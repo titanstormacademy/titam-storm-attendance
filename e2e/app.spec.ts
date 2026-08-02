@@ -106,6 +106,13 @@ test('student profile fits the mobile visual viewport', async ({ page, isMobile 
   expect(bounds.top).toBeGreaterThanOrEqual(-1)
   expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth + 1)
   expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight + 1)
+  const modalBody = page.locator('.student-profile-modal-body')
+  const scroll = await modalBody.evaluate((body) => {
+    body.scrollTop = body.scrollHeight
+    return { clientHeight: body.clientHeight, scrollHeight: body.scrollHeight, scrollTop: body.scrollTop }
+  })
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight)
+  expect(scroll.scrollTop).toBeGreaterThan(0)
 })
 
 test('branch switching does not enlarge the mobile viewport', async ({ page, isMobile }) => {
