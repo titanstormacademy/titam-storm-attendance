@@ -29,7 +29,8 @@ export function LoginPage() {
     }
   }
 
-  async function emergencySignIn() {
+  async function emergencySignIn(event?: React.FormEvent) {
+    event?.preventDefault()
     setError('')
     setSubmitting(true)
     try {
@@ -45,7 +46,7 @@ export function LoginPage() {
     <ActionIcon className="login-theme-toggle" aria-label={colorScheme === 'dark' ? 'Use light mode' : 'Use dark mode'} variant="subtle" color="gray" size={44} radius="xl" onClick={() => setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')}>{colorScheme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}</ActionIcon>
     <Box className="login-kiosk-shell">
       <Box className="login-kiosk-brand">
-        <Text className="login-kiosk-name"><span>Titan</span><strong>Storm</strong></Text>
+        <Text component="h1" className="login-kiosk-name"><span>Titan</span><strong>Storm</strong></Text>
         <Text className="login-kiosk-tagline">Basketball Academy</Text>
       </Box>
 
@@ -62,8 +63,8 @@ export function LoginPage() {
         </Box>
 
         <Divider my="lg" label="Administrator recovery" />
-        <Anchor className="login-recovery-link" component="button" type="button" size="sm" onClick={() => setEmergencyOpen((current) => !current)}><IconKey size={14} />{emergencyOpen ? 'Hide emergency account login' : 'Use emergency account login'}</Anchor>
-        <Collapse in={emergencyOpen}><Stack mt="md"><Text size="xs" c="dimmed">Use the original administrator account if the shared password has not been configured or was forgotten.</Text><TextInput label="Administrator email" type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} autoComplete="email" /><PasswordInput label="Account password" value={emailPassword} onChange={(event) => setEmailPassword(event.currentTarget.value)} autoComplete="current-password" /><Button variant="light" onClick={emergencySignIn} loading={submitting} disabled={!email || !emailPassword}>Emergency sign in</Button></Stack></Collapse>
+        <Anchor className="login-recovery-link" component="button" type="button" size="sm" aria-expanded={emergencyOpen} aria-controls="emergency-login" onClick={() => setEmergencyOpen((current) => !current)}><IconKey size={14} />{emergencyOpen ? 'Hide emergency account login' : 'Use emergency account login'}</Anchor>
+        <Collapse id="emergency-login" in={emergencyOpen}><Box component="form" onSubmit={emergencySignIn}><Stack mt="md"><Text size="xs" c="dimmed">Use the original administrator account if the shared password has not been configured or was forgotten.</Text><TextInput label="Administrator email" type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} autoComplete="email" required /><PasswordInput label="Account password" value={emailPassword} onChange={(event) => setEmailPassword(event.currentTarget.value)} autoComplete="current-password" required /><Button type="submit" variant="light" loading={submitting} disabled={!email || !emailPassword}>Emergency sign in</Button></Stack></Box></Collapse>
       </Paper>
     </Box>
   </Box>

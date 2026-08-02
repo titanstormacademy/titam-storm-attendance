@@ -41,5 +41,13 @@ export async function findDuplicateReference(branchId: number, reference: string
 }
 
 export async function openReceipt(path: string) {
-  window.open(await signedReceiptUrl(path), '_blank', 'noopener,noreferrer')
+  const popup = window.open('about:blank', '_blank')
+  if (!popup) throw new Error('Allow pop-ups to view payment receipts')
+  popup.opener = null
+  try {
+    popup.location.href = await signedReceiptUrl(path)
+  } catch (error) {
+    popup.close()
+    throw error
+  }
 }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ActionIcon, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSelect, NumberInput, Paper, PasswordInput, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { useEffect, useMemo, useState } from 'react'
+import { ActionIcon, Alert, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSelect, NumberInput, Paper, PasswordInput, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconBuilding, IconDeviceFloppy, IconEdit, IconKey, IconPhoto, IconPlus, IconTrash, IconUserShield } from '@tabler/icons-react'
@@ -24,6 +24,9 @@ export function SettingsPage({ branches, settings, onChanged }: {
   const [adminPassword, setAdminPassword] = useState('')
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [auxiliaryLoading, setAuxiliaryLoading] = useState(true)
+  const [auxiliaryError, setAuxiliaryError] = useState('')
+  const [reloadRequest, setReloadRequest] = useState(0)
   const [branchBaseline, setBranchBaseline] = useState('')
   const [ratesBaseline, setRatesBaseline] = useState('[]')
   const [accessBaseline, setAccessBaseline] = useState('[]')
@@ -31,20 +34,23 @@ export function SettingsPage({ branches, settings, onChanged }: {
   const passwordDirty = Boolean(adminPassword || confirmAdminPassword)
   const branchDirty = branchOpened && JSON.stringify(branchForm) !== branchBaseline
   const ratesDirty = JSON.stringify(rates) !== ratesBaseline
+  const rateValidation = useMemo(() => validateRates(rates), [rates])
   const accessDirty = JSON.stringify([profiles, memberships]) !== accessBaseline
   const dirty = brandDirty || passwordDirty || branchDirty || ratesDirty || accessDirty
   const { confirmDiscard } = useNavigationGuard('settings-editors', { dirty, pending: saving })
 
   useEffect(() => {
     let active = true
+    setAuxiliaryLoading(true)
+    setAuxiliaryError('')
     Promise.all([getHeadCoachRates(), getProfiles(), getBranchMemberships()]).then(([nextRates, nextProfiles, nextMemberships]) => {
       if (!active) return
       setRates(nextRates); setProfiles(nextProfiles); setMemberships(nextMemberships)
       setRatesBaseline(JSON.stringify(nextRates))
       setAccessBaseline(JSON.stringify([nextProfiles, nextMemberships]))
-    }).catch((error) => { if (active) notifications.show({ color: 'red', message: errorMessage(error) }) })
+    }).catch((error) => { if (active) setAuxiliaryError(errorMessage(error)) }).finally(() => { if (active) setAuxiliaryLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [reloadRequest])
 
   function editBranch(branch?: Branch) {
     const next = branch ? { ...branch } : { name: '', subtitle: '', status: 'Active' as const }
@@ -110,6 +116,9 @@ export function SettingsPage({ branches, settings, onChanged }: {
   }
 
   async function saveRates() {
+    if (auxiliaryLoading || auxiliaryError) return
+    if (rateValidation) { notifications.show({ color: 'red', message: rateValidation }); return }
+    if (!rates.length && !window.confirm('Remove every head coach rate? This will make all head coach commission calculations RM0.')) return
     setSaving(true)
     try {
       await replaceHeadCoachRates(rates.map(({ id: _id, ...rate }) => rate))
@@ -125,9 +134,14 @@ export function SettingsPage({ branches, settings, onChanged }: {
   }
 
   async function saveUser(profile: Profile) {
+    const branchIds = memberships.filter((item) => item.user_id === profile.id).map((item) => item.branch_id)
+    if (profile.role === 'staff' && !branchIds.length) { notifications.show({ color: 'red', message: 'Assign at least one branch before saving staff access.' }); return }
+    const [originalProfiles] = JSON.parse(accessBaseline) as [Profile[], Array<{ user_id: string; branch_id: number }>]
+    const original = originalProfiles.find((item) => item.id === profile.id)
+    if (original && original.role !== profile.role && !window.confirm(`Change ${profile.full_name}'s role from ${original.role} to ${profile.role}?`)) return
     setSaving(true)
     try {
-      await updateProfileAccess(profile.id, profile.role, memberships.filter((item) => item.user_id === profile.id).map((item) => item.branch_id))
+      await updateProfileAccess(profile.id, profile.role, branchIds)
       setAccessBaseline((current) => updateAccessBaseline(current, profile, memberships))
       notifications.show({ color: 'green', message: `${profile.full_name}'s access updated` })
     } catch (error) {
@@ -144,6 +158,8 @@ export function SettingsPage({ branches, settings, onChanged }: {
   return (
     <>
       <PageHeader title="Settings" description="Academy branding, locations, team access, and commission rules" />
+      {auxiliaryLoading && <Alert mb="lg" color="blue" title="Loading access and commission settings">Please wait before editing team access or coach rates.</Alert>}
+      {auxiliaryError && <Alert mb="lg" color="red" title="Could not load access and commission settings">{auxiliaryError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert>}
       <Grid gutter="xl">
         <Grid.Col span={{ base: 12, lg: 5 }}>
           <Stack>
@@ -167,14 +183,15 @@ export function SettingsPage({ branches, settings, onChanged }: {
             <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>
               <Group mb="xs"><IconUserShield size={22} /><Title order={4}>Team access</Title></Group>
               <Text c="dimmed" size="sm" mb="lg">Emergency email accounts are managed here. Name-only basic users automatically receive limited attendance access to active branches.</Text>
-              <Stack>{profiles.map((profile) => <Paper key={profile.id} p="md" radius="md" withBorder><Grid align="end"><Grid.Col span={{ base: 12, md: 4 }}><Text fw={700}>{profile.full_name || 'Unnamed user'}</Text><Text size="xs" c="dimmed">{profile.id.slice(0, 8)}…</Text></Grid.Col><Grid.Col span={{ base: 12, sm: 4, md: 3 }}><Select label="Role" value={profile.role} onChange={(value) => setProfiles((current) => current.map((item) => item.id === profile.id ? { ...item, role: value as Profile['role'] } : item))} data={[{ value: 'staff', label: 'Staff' }, { value: 'admin', label: 'Admin' }]} /></Grid.Col><Grid.Col span={{ base: 12, sm: 8, md: 4 }}><MultiSelect label="Branches" disabled={profile.role === 'admin'} value={memberships.filter((item) => item.user_id === profile.id).map((item) => String(item.branch_id))} onChange={(values) => setUserBranches(profile.id, values)} data={branches.filter((branch) => branch.status === 'Active').map((branch) => ({ value: String(branch.id), label: branch.name }))} /></Grid.Col><Grid.Col span={{ base: 12, md: 1 }}><Button fullWidth variant="light" onClick={() => saveUser(profile)} loading={saving} leftSection={<IconDeviceFloppy size={17} />}>Save</Button></Grid.Col></Grid></Paper>)}</Stack>
+              <Stack>{profiles.map((profile) => <Paper key={profile.id} p="md" radius="md" withBorder><Grid align="end"><Grid.Col span={{ base: 12, md: 3 }}><Text fw={700}>{profile.full_name || 'Unnamed user'}</Text><Text size="xs" c="dimmed">{profile.id.slice(0, 8)}…</Text></Grid.Col><Grid.Col span={{ base: 12, sm: 4, md: 3 }}><Select label="Role" value={profile.role} onChange={(value) => setProfiles((current) => current.map((item) => item.id === profile.id ? { ...item, role: value as Profile['role'] } : item))} data={[{ value: 'staff', label: 'Staff' }, { value: 'admin', label: 'Admin' }]} /></Grid.Col><Grid.Col span={{ base: 12, sm: 8, md: 4 }}><MultiSelect label="Branches" disabled={profile.role === 'admin'} value={memberships.filter((item) => item.user_id === profile.id).map((item) => String(item.branch_id))} onChange={(values) => setUserBranches(profile.id, values)} data={branches.filter((branch) => branch.status === 'Active').map((branch) => ({ value: String(branch.id), label: branch.name }))} /></Grid.Col><Grid.Col span={{ base: 12, md: 2 }}><Button fullWidth variant="light" onClick={() => saveUser(profile)} loading={saving} leftSection={<IconDeviceFloppy size={17} />}>Save</Button></Grid.Col></Grid></Paper>)}</Stack>
             </Paper>
             <Paper p={{ base: 'md', sm: 'xl' }} radius="lg" withBorder>
-              <Group justify="space-between" mb="xs"><Title order={4}>Head coach rate table</Title><Button size="xs" variant="light" leftSection={<IconPlus size={15} />} onClick={() => setRates([...rates, { id: -Date.now(), min_students: 1, max_students: 49, min_fee: 0, max_fee: 99999, payout: 0 }])}>Add row</Button></Group>
+              <Group justify="space-between" mb="xs"><Title order={4}>Head coach rate table</Title><Button size="xs" variant="light" leftSection={<IconPlus size={15} />} disabled={auxiliaryLoading || Boolean(auxiliaryError)} onClick={() => setRates([...rates, { id: -Date.now(), min_students: 1, max_students: 49, min_fee: 0, max_fee: 99999, payout: 0 }])}>Add row</Button></Group>
               <Text c="dimmed" size="sm" mb="lg">Payout per Paid student-month, matched by distinct unsettled student count and each student’s monthly fee.</Text>
+              {rateValidation && <Alert color="red" mb="md">{rateValidation}</Alert>}
               <Stack hiddenFrom="md">{rates.map((rate, index) => <Paper key={rate.id} p="md" radius="md" withBorder><Grid><Grid.Col span={6}><NumberInput label="Students from" value={rate.min_students} min={0} onChange={(value) => updateRate(index, 'min_students', value, rates, setRates)} /></Grid.Col><Grid.Col span={6}><NumberInput label="Students to" value={rate.max_students} min={0} onChange={(value) => updateRate(index, 'max_students', value, rates, setRates)} /></Grid.Col><Grid.Col span={6}><NumberInput label="Fee from" prefix="RM " value={rate.min_fee} min={0} onChange={(value) => updateRate(index, 'min_fee', value, rates, setRates)} /></Grid.Col><Grid.Col span={6}><NumberInput label="Fee to" prefix="RM " value={rate.max_fee} min={0} onChange={(value) => updateRate(index, 'max_fee', value, rates, setRates)} /></Grid.Col><Grid.Col span={10}><NumberInput label="Payout" prefix="RM " value={rate.payout} min={0} onChange={(value) => updateRate(index, 'payout', value, rates, setRates)} /></Grid.Col><Grid.Col span={2} style={{ display: 'flex', alignItems: 'end' }}><ActionIcon aria-label="Delete rate row" size={44} color="red" variant="light" onClick={() => setRates(rates.filter((_, rowIndex) => rowIndex !== index))}><IconTrash size={16} /></ActionIcon></Grid.Col></Grid></Paper>)}</Stack>
-              <Box visibleFrom="md"><Table.ScrollContainer minWidth={620}><Table><Table.Thead><Table.Tr><Table.Th>Students from</Table.Th><Table.Th>Students to</Table.Th><Table.Th>Fee from</Table.Th><Table.Th>Fee to</Table.Th><Table.Th>Payout</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rates.map((rate, index) => <Table.Tr key={rate.id}><Table.Td><NumberInput hideControls value={rate.min_students} min={0} onChange={(value) => updateRate(index, 'min_students', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput hideControls value={rate.max_students} min={0} onChange={(value) => updateRate(index, 'max_students', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput hideControls prefix="RM " value={rate.min_fee} min={0} onChange={(value) => updateRate(index, 'min_fee', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput hideControls prefix="RM " value={rate.max_fee} min={0} onChange={(value) => updateRate(index, 'max_fee', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput hideControls prefix="RM " value={rate.payout} min={0} onChange={(value) => updateRate(index, 'payout', value, rates, setRates)} /></Table.Td><Table.Td><ActionIcon aria-label="Delete rate row" color="red" variant="subtle" onClick={() => setRates(rates.filter((_, rowIndex) => rowIndex !== index))}><IconTrash size={16} /></ActionIcon></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Box>
-              <Button fullWidth mt="lg" onClick={saveRates} loading={saving}>Save rate table</Button>
+              <Box visibleFrom="md"><Table.ScrollContainer minWidth={620}><Table><Table.Thead><Table.Tr><Table.Th>Students from</Table.Th><Table.Th>Students to</Table.Th><Table.Th>Fee from</Table.Th><Table.Th>Fee to</Table.Th><Table.Th>Payout</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{rates.map((rate, index) => <Table.Tr key={rate.id}><Table.Td><NumberInput aria-label={`Minimum students for rate row ${index + 1}`} hideControls value={rate.min_students} min={0} onChange={(value) => updateRate(index, 'min_students', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput aria-label={`Maximum students for rate row ${index + 1}`} hideControls value={rate.max_students} min={0} onChange={(value) => updateRate(index, 'max_students', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput aria-label={`Minimum fee for rate row ${index + 1}`} hideControls prefix="RM " value={rate.min_fee} min={0} onChange={(value) => updateRate(index, 'min_fee', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput aria-label={`Maximum fee for rate row ${index + 1}`} hideControls prefix="RM " value={rate.max_fee} min={0} onChange={(value) => updateRate(index, 'max_fee', value, rates, setRates)} /></Table.Td><Table.Td><NumberInput aria-label={`Payout for rate row ${index + 1}`} hideControls prefix="RM " value={rate.payout} min={0} onChange={(value) => updateRate(index, 'payout', value, rates, setRates)} /></Table.Td><Table.Td><ActionIcon aria-label="Delete rate row" color="red" variant="subtle" onClick={() => setRates(rates.filter((_, rowIndex) => rowIndex !== index))}><IconTrash size={16} /></ActionIcon></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Box>
+              <Button fullWidth mt="lg" onClick={saveRates} loading={saving} disabled={auxiliaryLoading || Boolean(auxiliaryError) || Boolean(rateValidation)}>Save rate table</Button>
             </Paper>
           </Stack>
         </Grid.Col>
@@ -185,6 +202,15 @@ export function SettingsPage({ branches, settings, onChanged }: {
       </Modal>
     </>
   )
+}
+
+function validateRates(rates: HeadCoachRate[]) {
+  for (const [index, rate] of rates.entries()) {
+    if (rate.min_students > rate.max_students || rate.min_fee > rate.max_fee) return `Rate row ${index + 1} has a minimum greater than its maximum.`
+    const overlaps = rates.some((other, otherIndex) => otherIndex !== index && rate.min_students <= other.max_students && rate.max_students >= other.min_students && rate.min_fee <= other.max_fee && rate.max_fee >= other.min_fee)
+    if (overlaps) return `Rate row ${index + 1} overlaps another student and fee range.`
+  }
+  return ''
 }
 
 function updateRate(index: number, field: keyof Omit<HeadCoachRate, 'id'>, value: string | number, rates: HeadCoachRate[], setRates: (rates: HeadCoachRate[]) => void) {

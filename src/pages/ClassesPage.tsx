@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Badge, Box, Button, Grid, Group, Menu, Modal, Paper, Select, SimpleGrid, Stack, Text, TextInput, Textarea, ThemeIcon } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Menu, Modal, Paper, Select, SimpleGrid, Stack, Text, TextInput, Textarea, ThemeIcon } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconBallBasketball, IconCalendarPlus, IconClock, IconDots, IconEdit, IconList, IconPlus, IconTrash, IconUsers } from '@tabler/icons-react'
 import { deleteClass, generateSessions, saveClass } from '../lib/api'
 import { deleteSession, getClassSessions, saveSession } from '../lib/sessionOperations'
-import { EmptyState, PageHeader } from '../components/ui'
+import { EmptyState, PageHeader, PageLoader } from '../components/ui'
 import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { AcademyClass, BootstrapData, Session } from '../types/models'
 
@@ -25,6 +25,8 @@ export function ClassesPage({ branchId, data, onChanged }: { branchId: number; d
   const [fromDate, setFromDate] = useState(dayjs().startOf('month').format('YYYY-MM-DD'))
   const [toDate, setToDate] = useState(dayjs().add(3, 'month').endOf('month').format('YYYY-MM-DD'))
   const [saving, setSaving] = useState(false)
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [sessionsError, setSessionsError] = useState('')
   const [formBaseline, setFormBaseline] = useState('')
   const [sessionBaseline, setSessionBaseline] = useState('')
   const [generatorBaseline, setGeneratorBaseline] = useState('')
@@ -48,6 +50,7 @@ export function ClassesPage({ branchId, data, onChanged }: { branchId: number; d
 
   async function submit() {
     if (!form.label.trim() || submitLock.current) return
+    if (form.start_time && form.end_time && form.end_time <= form.start_time) { notifications.show({ color: 'red', message: 'Class end time must be after its start time.' }); return }
     submitLock.current = true
     setSaving(true)
     try {
@@ -66,6 +69,7 @@ export function ClassesPage({ branchId, data, onChanged }: { branchId: number; d
 
   async function runGenerator() {
     if (!target) return
+    if (!fromDate || !toDate || toDate < fromDate) { notifications.show({ color: 'red', message: 'Choose a valid session range with To on or after From.' }); return }
     setSaving(true)
     try { const created = await generateSessions(target.id, fromDate, toDate); notifications.show({ color: 'green', title: 'Sessions generated', message: `${created} new session${created === 1 ? '' : 's'} created.` }); generateModal.close(); await openSessions(target); await onChanged() } catch (error) { notifications.show({ color: 'red', message: errorMessage(error) }) } finally { setSaving(false) }
   }
@@ -73,14 +77,14 @@ export function ClassesPage({ branchId, data, onChanged }: { branchId: number; d
   async function openSessions(item: AcademyClass) {
     const requestId = ++sessionRequest.current
     sessionTarget.current = item.id
-    setTarget(item); setSessions([]); sessionsModal.open(); setSaving(true)
+    setTarget(item); setSessions([]); setSessionsError(''); sessionsModal.open(); setSessionsLoading(true)
     try {
       const nextSessions = await getClassSessions(item.id)
       if (requestId === sessionRequest.current && sessionTarget.current === item.id) setSessions(nextSessions)
     } catch (error) {
-      if (requestId === sessionRequest.current) notifications.show({ color: 'red', message: errorMessage(error) })
+      if (requestId === sessionRequest.current) setSessionsError(errorMessage(error))
     } finally {
-      if (requestId === sessionRequest.current) setSaving(false)
+      if (requestId === sessionRequest.current) setSessionsLoading(false)
     }
   }
 
@@ -134,7 +138,7 @@ export function ClassesPage({ branchId, data, onChanged }: { branchId: number; d
 
       <Modal opened={generateOpened} onClose={closeGenerator} title="Bulk generate sessions" centered><Stack><Select label="Class" searchable value={target ? String(target.id) : null} onChange={(value) => setTarget(data.classes.find((item) => String(item.id) === value) || null)} data={data.classes.map((item) => ({ value: String(item.id), label: item.label }))} /><Paper p="md" radius="md" withBorder bg="var(--mantine-color-orange-light)"><Text fw={700} size="sm">Weekly schedule</Text><Text size="sm" c="dimmed">One session every {target?.day_of_week || 'selected weekday'} · {formatTime(target?.start_time || null)} – {formatTime(target?.end_time || null)}</Text><Text size="xs" c="dimmed" mt={4}>Existing dates are skipped automatically.</Text></Paper><Grid><Grid.Col span={{ base: 12, xs: 6 }}><TextInput label="From" type="date" value={fromDate} onChange={(event) => setFromDate(event.currentTarget.value)} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6 }}><TextInput label="To" type="date" value={toDate} onChange={(event) => setToDate(event.currentTarget.value)} /></Grid.Col></Grid><Button leftSection={<IconCalendarPlus size={17} />} onClick={runGenerator} loading={saving} disabled={!target}>Generate sessions</Button></Stack></Modal>
 
-      <Modal opened={sessionsOpened} onClose={closeSessions} title={`${target?.label || ''} sessions`} size="lg" centered><Stack><Group justify="space-between"><Text c="dimmed" size="sm">Add one-off training or correct generated sessions.</Text><Button leftSection={<IconPlus size={16} />} onClick={() => openSessionForm()}>Add session</Button></Group>{sessions.length ? sessions.map((session) => <Paper key={session.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><Box><Text fw={750}>{dayjs(session.session_date).format('dddd, D MMMM YYYY')}</Text><Text size="sm" c="dimmed">{session.coach?.name || 'No coach'}{session.notes ? ` · ${session.notes}` : ''}</Text></Box><Group gap="xs"><ActionIcon aria-label="Edit session" size={44} variant="light" onClick={() => openSessionForm(session)}><IconEdit size={17} /></ActionIcon><ActionIcon aria-label="Delete session" size={44} variant="light" color="red" onClick={() => removeSession(session)}><IconTrash size={17} /></ActionIcon></Group></Group></Paper>) : <Text c="dimmed" ta="center" py="xl">No sessions yet.</Text>}</Stack></Modal>
+      <Modal opened={sessionsOpened} onClose={closeSessions} title={`${target?.label || ''} sessions`} size="lg" centered><Stack><Group justify="space-between"><Text c="dimmed" size="sm">Add one-off training or correct generated sessions.</Text><Button leftSection={<IconPlus size={16} />} onClick={() => openSessionForm()} disabled={sessionsLoading || Boolean(sessionsError)}>Add session</Button></Group>{sessionsLoading ? <PageLoader label="Loading sessions…" /> : sessionsError ? <Alert color="red" title="Could not load sessions">{sessionsError}<Button mt="md" size="xs" onClick={() => target && openSessions(target)}>Retry</Button></Alert> : sessions.length ? sessions.map((session) => <Paper key={session.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><Box><Text fw={750}>{dayjs(session.session_date).format('dddd, D MMMM YYYY')}</Text><Text size="sm" c="dimmed">{session.coach?.name || 'No coach'}{session.notes ? ` · ${session.notes}` : ''}</Text></Box><Group gap="xs"><ActionIcon aria-label="Edit session" size={44} variant="light" onClick={() => openSessionForm(session)}><IconEdit size={17} /></ActionIcon><ActionIcon aria-label="Delete session" size={44} variant="light" color="red" onClick={() => removeSession(session)}><IconTrash size={17} /></ActionIcon></Group></Group></Paper>) : <Text c="dimmed" ta="center" py="xl">No sessions yet.</Text>}</Stack></Modal>
 
       <Modal opened={sessionFormOpened} onClose={closeSessionForm} title={sessionForm.id ? 'Edit session' : 'Add session'} centered><Stack><TextInput label="Date" type="date" value={sessionForm.session_date} onChange={(event) => setSessionForm({ ...sessionForm, session_date: event.currentTarget.value })} required /><Select label="Coach" clearable value={sessionForm.coach_id ? String(sessionForm.coach_id) : null} onChange={(value) => setSessionForm({ ...sessionForm, coach_id: value ? Number(value) : null })} data={data.coaches.filter((coach) => coach.status === 'Active').map((coach) => ({ value: String(coach.id), label: coach.name }))} /><Textarea label="Notes" value={sessionForm.notes} onChange={(event) => setSessionForm({ ...sessionForm, notes: event.currentTarget.value })} /><Group className="modal-actions" justify="flex-end"><Button variant="default" disabled={saving} onClick={closeSessionForm}>Cancel</Button><Button onClick={submitSession} loading={saving}>Save session</Button></Group></Stack></Modal>
     </>

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Badge, Box, Button, Divider, Group, Modal, Paper, ScrollArea, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Box, Button, Divider, Group, Modal, Paper, ScrollArea, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconArrowLeft, IconCheck, IconChevronRight, IconSearch, IconTrash, IconUserPlus, IconUsers } from '@tabler/icons-react'
 import { addCoachAttendance, ensureTodaySession, getAttendance, getCoachAttendance, markAllPresent, removeAttendance, removeCoachAttendance, setAttendanceRemark, setAttendanceStatus } from '../lib/api'
 import { getClassSessions } from '../lib/sessionOperations'
 import { publicImageUrl } from '../lib/supabase'
-import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
+import { EmptyState, PageHeader, PageLoader, PersonAvatar, PhotoLightbox } from '../components/ui'
 import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { AcademyClass, Attendance, BootstrapData, CoachAttendance, Session, Student } from '../types/models'
 
@@ -23,7 +23,9 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
   const [coachRecords, setCoachRecords] = useState<CoachAttendance[]>([])
   const [search, setSearch] = useState('')
   const [level, setLevel] = useState<string | null>('All')
-  const [, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [reloadRequest, setReloadRequest] = useState(0)
   const [bulkPending, setBulkPending] = useState(false)
   const [walkinPending, setWalkinPending] = useState(false)
   const [coachPending, setCoachPending] = useState(false)
@@ -121,6 +123,9 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
     const requestId = ++sessionRequest.current
     let active = true
     setLoading(true)
+    setLoadError('')
+    setRecords([])
+    setCoachRecords([])
     const request = mode === 'today'
       ? ensureTodaySession(academyClass).then((selected) => ({ list: [selected], selected }))
       : getClassSessions(academyClass.id).then((list) => ({ list, selected: nearestSession(list) }))
@@ -131,9 +136,9 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
       if (!selected) { setRecords([]); setCoachRecords([]); return }
       const [nextRecords, nextCoaches] = await Promise.all([getAttendance(selected.id), getCoachAttendance(selected.id)])
       if (active && requestId === sessionRequest.current) { setRecords(nextRecords); setCoachRecords(nextCoaches) }
-    }).catch((error) => { if (active && requestId === sessionRequest.current) notifications.show({ color: 'red', message: errorMessage(error) }) }).finally(() => { if (active && requestId === sessionRequest.current) setLoading(false) })
+    }).catch((error) => { if (active && requestId === sessionRequest.current) setLoadError(errorMessage(error)) }).finally(() => { if (active && requestId === sessionRequest.current) setLoading(false) })
     return () => { active = false }
-  }, [academyClass, mode, screen])
+  }, [academyClass, mode, reloadRequest, screen])
 
   function openClass(item: AcademyClass, nextMode: 'today' | 'history') {
     setMode(nextMode)
@@ -173,6 +178,9 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
     if (!confirmDiscard({ dirty: remarksDirty, pending: mutationPending })) return
     const requestId = ++sessionRequest.current
     setSession(next)
+    setRecords([])
+    setCoachRecords([])
+    setLoadError('')
     setLoading(true)
     try {
       const [nextRecords, nextCoaches] = await Promise.all([getAttendance(next.id), getCoachAttendance(next.id)])
@@ -181,7 +189,7 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
         setCoachRecords(nextCoaches)
       }
     } catch (error) {
-      if (requestId === sessionRequest.current) notifications.show({ color: 'red', message: errorMessage(error) })
+      if (requestId === sessionRequest.current) setLoadError(errorMessage(error))
     } finally {
       if (requestId === sessionRequest.current) setLoading(false)
     }
@@ -315,9 +323,9 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
         <Box><Title order={2}>{academyClass?.label || 'Attendance'}</Title><Text c="dimmed" size="sm">{mode === 'history' ? 'Past Records' : session ? dayjs(session.session_date).format('dddd, D MMMM YYYY') : 'Today'}</Text></Box>
       </Box>
 
-      {mode === 'history' && sessions.length > 0 && <Box className="attendance-date-pills">{[...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date)).map((item) => <button type="button" key={item.id} className={session?.id === item.id ? 'active' : ''} disabled={mutationPending} onClick={() => selectSession(item)}>{dayjs(item.session_date).format('D MMM YYYY')}</button>)}</Box>}
+      {mode === 'history' && sessions.length > 0 && <Box className="attendance-date-pills">{[...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date)).map((item) => <button type="button" key={item.id} className={session?.id === item.id ? 'active' : ''} aria-pressed={session?.id === item.id} disabled={mutationPending} onClick={() => selectSession(item)}>{dayjs(item.session_date).format('D MMM YYYY')}</button>)}</Box>}
 
-      {session ? <Stack gap="md">
+      {loading ? <PageLoader label="Loading attendance…" /> : loadError ? <Alert color="red" title="Could not load attendance">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : session ? <Stack gap="md">
         <SimpleGrid cols={2} spacing="sm" className="attendance-summary-grid">
           <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{present.length}</Text><Text size="xs" c="dimmed">Present</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">Regular <b>{breakdown.regular}</b></Text><Text size="xs" c="orange">Trial <b>{breakdown.trial}</b></Text><Text size="xs" c="blue">Replacement <b>{breakdown.replacement}</b></Text></Group></Paper>
           <Paper className="attendance-summary-card" p="lg" radius="lg"><Text className="attendance-summary-value">{notMarked}</Text><Text size="xs" c="dimmed">Not marked</Text></Paper>
@@ -326,10 +334,10 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
         <Box>
           <Text className="attendance-section-label">Coaches present</Text>
           {coachRecords.length ? <Group gap="xs" mb="sm">{coachRecords.map((item) => <Badge key={item.id} size="lg" variant="light" rightSection={<ActionIcon aria-label="Remove coach" variant="transparent" color="gray" size="xs" disabled={coachPending} onClick={() => deletePresentCoach(item.coach_id)}><IconTrash size={12} /></ActionIcon>}>{data.coaches.find((coach) => coach.id === item.coach_id)?.name || 'Coach'} · {item.hours}h</Badge>)}</Group> : <Text size="sm" c="dimmed" mb="sm">None marked yet</Text>}
-          <Group wrap="nowrap"><Select placeholder="-- Add coach --" value={coachId} onChange={setCoachId} data={data.coaches.filter((coach) => !coachRecords.some((item) => item.coach_id === coach.id)).map((coach) => ({ value: String(coach.id), label: coach.name }))} flex={1} /><Button variant="light" onClick={addCoach} loading={coachPending} disabled={!coachId || coachPending}>Add</Button></Group>
+          <Group wrap="nowrap"><Select aria-label="Coach to add" placeholder="-- Add coach --" value={coachId} onChange={setCoachId} data={data.coaches.filter((coach) => !coachRecords.some((item) => item.coach_id === coach.id)).map((coach) => ({ value: String(coach.id), label: coach.name }))} flex={1} /><Button variant="light" onClick={addCoach} loading={coachPending} disabled={!coachId || coachPending}>Add</Button></Group>
         </Box>
 
-        <Group className="attendance-tools" wrap="wrap"><TextInput leftSection={<IconSearch size={16} />} placeholder="Search students" value={search} onChange={(event) => setSearch(event.currentTarget.value)} flex={1} /><Select value={level} onChange={setLevel} data={['All', 'Beginner', 'Intermediate', 'Advanced']} w={150} /><Button leftSection={<IconCheck size={16} />} variant="light" onClick={markAll} loading={bulkPending} disabled={mutationPending}>All present</Button></Group>
+        <Group className="attendance-tools" wrap="wrap"><TextInput aria-label="Search enrolled students" leftSection={<IconSearch size={16} />} placeholder="Search students" value={search} onChange={(event) => setSearch(event.currentTarget.value)} flex={1} /><Select aria-label="Filter enrolled students by level" value={level} onChange={setLevel} data={['All', 'Beginner', 'Intermediate', 'Advanced']} w={150} /><Button leftSection={<IconCheck size={16} />} variant="light" onClick={markAll} loading={bulkPending} disabled={mutationPending}>All present</Button></Group>
 
         <Box>
           <Text className="attendance-section-label">Enrolled students</Text>
@@ -365,7 +373,7 @@ function AttendanceClassCard({ item, enrolled, action, onClick }: { item: Academ
 }
 
 function AttendanceStudentCard({ student, present, remarks, disabled, onToggle, onRemarkChange, onRemark, onPhoto, onDelete }: { student: Student; present: boolean; remarks: string; disabled: boolean; onToggle: () => void; onRemarkChange: (value: string) => void; onRemark: (value: string) => void; onPhoto: () => void; onDelete?: () => void }) {
-  return <Paper className={`attendance-student-card ${present ? 'present' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} onClick={onPhoto} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Text size="xs" c="dimmed">{student.status}</Text></Box><Button className="attendance-present-button" color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} disabled={disabled} loading={disabled} onClick={onToggle}>Present</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" disabled={disabled} onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group><TextInput value={remarks} disabled={disabled} onChange={(event) => onRemarkChange(event.currentTarget.value)} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
+  return <Paper className={`attendance-student-card ${present ? 'present' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} onClick={onPhoto} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Text size="xs" c="dimmed">{student.status}</Text></Box><Button className="attendance-present-button" aria-pressed={present} aria-label={`Mark ${student.name} ${present ? 'not present' : 'present'}`} color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} disabled={disabled} loading={disabled} onClick={onToggle}>{present ? 'Present ✓' : 'Mark present'}</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" disabled={disabled} onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group><TextInput aria-label={`Remarks for ${student.name}`} value={remarks} disabled={disabled} onChange={(event) => onRemarkChange(event.currentTarget.value)} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
 }
 
 function nearestSession(items: Session[]) {

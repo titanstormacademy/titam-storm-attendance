@@ -6,7 +6,7 @@ export function PageHeader({ title, description, action }: { title: string; desc
   return (
     <Group className="page-header" justify="space-between" align="flex-start" mb="xl" wrap="wrap">
       <Box className="page-header-copy">
-        <Title order={2}>{title}</Title>
+        <Title component="h1" order={2} tabIndex={-1}>{title}</Title>
         <Text c="dimmed" mt={4}>{description}</Text>
       </Box>
       {action && <Box className="page-header-action">{action}</Box>}
@@ -78,6 +78,6 @@ export function PhotoLightbox({ src, name, opened, onClose }: { src: string | nu
   return <Modal className="photo-lightbox" opened={opened} onClose={onClose} title={name} size="xl" centered overlayProps={{ backgroundOpacity: 0.82, blur: 5 }}><Box className="photo-lightbox-stage">{src ? <Image src={src} alt={name} fit="contain" /> : <Avatar name={name} color="orange" size={180} radius="xl" />}</Box></Modal>
 }
 
-export function PageLoader() {
-  return <Stack><Skeleton height={120} radius="lg" /><Skeleton height={240} radius="lg" /><Skeleton height={180} radius="lg" /></Stack>
+export function PageLoader({ label = 'Loading workspace…' }: { label?: string }) {
+  return <Stack role="status" aria-live="polite"><Text c="dimmed" size="sm">{label}</Text><Skeleton height={120} radius="lg" /><Skeleton height={240} radius="lg" /><Skeleton height={180} radius="lg" /></Stack>
 }

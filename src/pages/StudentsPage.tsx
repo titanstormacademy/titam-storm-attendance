@@ -29,6 +29,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
   const [attendance, setAttendance] = useState<StudentAttendanceEntry[]>([])
   const [attendanceLoading, setAttendanceLoading] = useState(false)
   const [photo, setPhoto] = useState<File | null>(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
   const [photoView, setPhotoView] = useState<{ src: string | null; name: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [baseline, setBaseline] = useState('')
@@ -38,6 +39,13 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
   const currentSnapshot = studentSnapshot(form, classIds, enrollmentDates, withdrawalDates)
   const dirty = opened && (Boolean(photo) || currentSnapshot !== baseline)
   const { confirmDiscard } = useNavigationGuard('student-editor', { dirty, pending: saving })
+
+  useEffect(() => {
+    if (!photo) { setPhotoPreviewUrl(null); return }
+    const url = URL.createObjectURL(photo)
+    setPhotoPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [photo])
 
   useEffect(() => {
     if (!isAdmin || createRequest <= handledCreateRequest.current) return
@@ -121,14 +129,22 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
   }
 
   async function submit() {
-    if (!isAdmin || !form.name.trim() || submitLock.current) return
+    if (!isAdmin || submitLock.current) return
+    if (!form.name.trim()) {
+      notifications.show({ color: 'red', message: 'Student name is required.' })
+      return
+    }
+    if (classIds.some((id) => !enrollmentDates[id])) {
+      notifications.show({ color: 'red', message: 'Choose a start date for every selected class.' })
+      return
+    }
     if (Object.values(withdrawalDates).some((date) => !date)) {
       notifications.show({ color: 'red', message: 'Choose the final enrolled date for every removed class.' })
       return
     }
     submitLock.current = true
     const requestId = profileRequest.current
-    const enrollments = classIds.map((id) => ({ class_id: Number(id), start_date: enrollmentDates[id] || dayjs().format('YYYY-MM-DD') }))
+    const enrollments = classIds.map((id) => ({ class_id: Number(id), start_date: enrollmentDates[id] }))
     const withdrawals = Object.entries(withdrawalDates).map(([id, end_date]) => ({ class_id: Number(id), end_date }))
     let uploadedPhotoPath: string | null = null
     setSaving(true)
@@ -185,19 +201,19 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
     }
   }
 
-  const photoUrl = form.photo_path ? publicImageUrl('student-photos', form.photo_path) : null
+  const photoUrl = photoPreviewUrl || (form.photo_path ? publicImageUrl('student-photos', form.photo_path) : null)
   const displayAge = form.date_of_birth ? dayjs().diff(dayjs(form.date_of_birth), 'year') : form.age ?? null
 
   return <>
     <PageHeader title="Students" description="Search, review, and manage student profiles" />
     <Paper className="student-filter-panel" p="md" radius="lg" withBorder mb="sm">
       <Stack gap="sm">
-        <TextInput leftSection={<IconSearch size={18} />} placeholder="Search by name or phone…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
+        <TextInput aria-label="Search students" leftSection={<IconSearch size={18} />} placeholder="Search by name or phone…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
         <SegmentedControl className="student-status-filter" fullWidth value={status} onChange={setStatus} data={['All', 'Active', 'Trial', 'Inactive']} />
-        <Grid gutter="xs"><Grid.Col span={6}><Select value={level} onChange={setLevel} data={[{ value: 'All', label: 'All Levels' }, 'Beginner', 'Intermediate', 'Advanced']} allowDeselect={false} /></Grid.Col><Grid.Col span={6}><Select value={classFilter} onChange={setClassFilter} data={[{ value: 'All', label: 'All Classes' }, ...data.classes.map((item) => ({ value: String(item.id), label: item.label }))]} allowDeselect={false} /></Grid.Col></Grid>
+        <Grid gutter="xs"><Grid.Col span={6}><Select aria-label="Filter students by level" value={level} onChange={setLevel} data={[{ value: 'All', label: 'All Levels' }, 'Beginner', 'Intermediate', 'Advanced']} allowDeselect={false} /></Grid.Col><Grid.Col span={6}><Select aria-label="Filter students by class" value={classFilter} onChange={setClassFilter} data={[{ value: 'All', label: 'All Classes' }, ...data.classes.map((item) => ({ value: String(item.id), label: item.label }))]} allowDeselect={false} /></Grid.Col></Grid>
       </Stack>
     </Paper>
-    <Text size="xs" c="dimmed" mb="xs" px={4}>{filtered.length} students total</Text>
+    <Text size="xs" c="dimmed" mb="xs" px={4}>{filtered.length === data.students.length ? `${filtered.length} students` : `${filtered.length} of ${data.students.length} students`}</Text>
 
     {filtered.length ? <Box className="student-directory-grid">{filtered.map((student) => {
       const enrollmentCount = new Set(data.enrollments.filter((item) => item.student_id === student.id && !item.end_date).map((item) => item.class_id)).size

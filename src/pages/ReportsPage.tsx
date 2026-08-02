@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { Badge, Box, Button, Group, Paper, SegmentedControl, Select, Stack, Table, Text } from '@mantine/core'
+import { Alert, Badge, Box, Button, Group, Paper, SegmentedControl, Select, Stack, Table, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconCheck, IconChevronDown, IconClipboard } from '@tabler/icons-react'
 import { getAttendanceReport } from '../lib/api'
-import { PageHeader } from '../components/ui'
+import { PageHeader, PageLoader } from '../components/ui'
 import type { AcademyClass, Attendance, BootstrapData, Student } from '../types/models'
 
 type ReportRecord = Attendance & { student: Pick<Student, 'id' | 'name' | 'status' | 'gender' | 'level'>; class: Pick<AcademyClass, 'id' | 'label'> }
@@ -29,6 +29,8 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set())
   const [records, setRecords] = useState<ReportRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [reloadRequest, setReloadRequest] = useState(0)
 
   const period = useMemo(() => {
     const start = month === 'All' ? dayjs(`${year}-01-01`) : dayjs(`${year}-${month}-01`)
@@ -39,12 +41,15 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
   useEffect(() => {
     let active = true
     setLoading(true)
+    setLoadError('')
+    setRecords([])
+    setExpandedRows(new Set())
     getAttendanceReport(branchId, period.start, period.end)
       .then((next) => { if (active) setRecords(next) })
-      .catch((error) => { if (active) notifications.show({ color: 'red', message: error instanceof Error ? error.message : 'Could not load report' }) })
+      .catch((error) => { if (active) setLoadError(error instanceof Error ? error.message : 'Could not load report') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [branchId, period.end, period.start])
+  }, [branchId, period.end, period.start, reloadRequest])
 
   const rows = useMemo(() => {
     const byStudent = new Map<number, ReportRow>()
@@ -95,18 +100,17 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
   }
 
   return <>
-    <PageHeader title="Reports" description="Student attendance overview" action={<Button variant="light" leftSection={<IconClipboard size={17} />} onClick={copyReport}>Copy</Button>} />
-    <SegmentedControl value={view} onChange={(value) => setView(value as 'summary' | 'grid')} data={[{ value: 'summary', label: 'Summary' }, { value: 'grid', label: 'Grid' }]} mb="md" />
+    <PageHeader title="Reports" description="Student attendance overview" action={<Button variant="light" leftSection={<IconClipboard size={17} />} onClick={copyReport} disabled={loading || Boolean(loadError)}>Copy</Button>} />
+    <SegmentedControl value={view} onChange={(value) => { const nextView = value as 'summary' | 'grid'; setView(nextView); if (nextView === 'grid' && month === 'All') setMonth(dayjs().format('MM')) }} data={[{ value: 'summary', label: 'Summary' }, { value: 'grid', label: 'Grid' }]} mb="md" />
     <Group grow mb="md" align="flex-end"><Select label="Year" value={year} onChange={(value) => setYear(value || dayjs().format('YYYY'))} data={years} allowDeselect={false} /><Select label="Month" value={month} onChange={(value) => setMonth(value || 'All')} data={monthOptions} allowDeselect={false} /></Group>
 
-    {view === 'summary' ? <Stack gap="sm">{rows.map((row) => {
+    {loading ? <PageLoader label="Loading report…" /> : loadError ? <Alert color="red" title="Could not load report">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : rows.length === 0 ? <Paper p="xl" radius="lg" withBorder><Text c="dimmed" ta="center">No attendance records for {period.label}.</Text></Paper> : view === 'summary' ? <Stack gap="sm">{rows.map((row) => {
       const expanded = expandedRows.has(row.id)
-      return <Paper key={row.id} className="report-student-summary" radius="lg" withBorder><Box component="button" type="button" className="report-summary-toggle" aria-expanded={expanded} onClick={() => toggleRow(row.id)}><Group justify="space-between" align="flex-start" wrap="nowrap"><Box><Text fw={800}>{row.name}</Text><Text size="xs" c="dimmed">{row.enrolledClasses.length} class{row.enrolledClasses.length === 1 ? '' : 'es'} enrolled</Text></Box><Group gap="sm" wrap="nowrap"><Box ta="center"><Text className="report-total">{row.total}</Text><Text size="xs" c="dimmed">classes</Text></Box><IconChevronDown className={expanded ? 'expanded' : ''} size={20} /></Group></Group><Group gap={5} mt="xs">{row.enrolledClasses.map((item) => <Badge key={item.id} size="sm" variant="light" color="blue">{item.label}</Badge>)}</Group></Box>{expanded && <Box className="report-summary-detail"><DividerLine /><Group justify="space-between" mb="sm"><Text fw={750} size="sm">{period.label}</Text><Text fw={750} size="sm">{row.total} classes</Text></Group>{row.classes.size ? <Stack gap="md">{[...row.classes].map(([classId, item]) => <Box key={classId}><Group justify="space-between" wrap="nowrap"><Group gap="xs" wrap="nowrap"><span className="report-class-dot" style={{ background: colorFor(classId) }} /><Text size="sm" c="dimmed">{item.label}{item.walkIns ? ` · ${item.walkIns} walk-in` : ''}</Text></Group><Text size="sm" fw={700}>{item.dates.length}</Text></Group><Stack gap={4} mt={5} ml="md">{item.dates.sort().map((attendanceDate) => <Group key={attendanceDate} gap="xs"><IconCheck size={14} color="#22c55e" /><Text size="xs" c="dimmed">{dayjs(attendanceDate).format('D MMM YYYY')}</Text></Group>)}</Stack></Box>)}</Stack> : <Text size="sm" c="dimmed">No attendance in this period.</Text>}</Box>}</Paper>
+      return <Paper key={row.id} className="report-student-summary" radius="lg" withBorder><Box component="button" type="button" className="report-summary-toggle" aria-expanded={expanded} onClick={() => toggleRow(row.id)}><Group justify="space-between" align="flex-start" wrap="nowrap"><Box><Text fw={800}>{row.name}</Text><Text size="xs" c="dimmed">{row.enrolledClasses.length} class{row.enrolledClasses.length === 1 ? '' : 'es'} enrolled</Text></Box><Group gap="sm" wrap="nowrap"><Box ta="center"><Text className="report-total">{row.total}</Text><Text size="xs" c="dimmed">attendances</Text></Box><IconChevronDown className={expanded ? 'expanded' : ''} size={20} /></Group></Group><Group gap={5} mt="xs">{row.enrolledClasses.map((item) => <Badge key={item.id} size="sm" variant="light" color="blue">{item.label}</Badge>)}</Group></Box>{expanded && <Box className="report-summary-detail"><DividerLine /><Group justify="space-between" mb="sm"><Text fw={750} size="sm">{period.label}</Text><Text fw={750} size="sm">{row.total} attendances</Text></Group>{row.classes.size ? <Stack gap="md">{[...row.classes].map(([classId, item]) => <Box key={classId}><Group justify="space-between" wrap="nowrap"><Group gap="xs" wrap="nowrap"><span className="report-class-dot" style={{ background: colorFor(classId) }} /><Text size="sm" c="dimmed">{item.label}{item.walkIns ? ` · ${item.walkIns} walk-in` : ''}</Text></Group><Text size="sm" fw={700}>{item.dates.length}</Text></Group><Stack gap={4} mt={5} ml="md">{item.dates.sort().map((attendanceDate) => <Group key={attendanceDate} gap="xs"><IconCheck size={14} color="#22c55e" /><Text size="xs" c="dimmed">{dayjs(attendanceDate).format('D MMM YYYY')}</Text></Group>)}</Stack></Box>)}</Stack> : <Text size="sm" c="dimmed">No attendance in this period.</Text>}</Box>}</Paper>
     })}</Stack> : <>
       <Group gap="md" mb="sm" wrap="wrap">{classesInReport.map(([id, label]) => <Group key={id} gap={5}><span className="report-class-dot" style={{ background: colorFor(id) }} /><Text size="xs" c="dimmed">{label}</Text></Group>)}</Group>
-      <Paper radius="lg" withBorder className="report-grid-card"><Table.ScrollContainer minWidth={Math.max(680, 220 + dates.length * 44)}><Table className="attendance-grid-table" withColumnBorders striped><Table.Thead><Table.Tr><Table.Th className="report-sticky-name">Name</Table.Th><Table.Th>Total</Table.Th>{dates.map((date) => <Table.Th key={date} ta="center"><Text size="xs" fw={700}>{dayjs(date).format('MMM YYYY')}</Text><Text size="xs">{dayjs(date).format('D')}</Text></Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.id}><Table.Td className="report-sticky-name"><Group gap={4} wrap="nowrap"><Group gap={2}>{row.enrolledClasses.map((item) => <span key={item.id} className="report-class-dot" style={{ background: colorFor(item.id) }} />)}</Group><Text size="sm" fw={650}>{row.name}{row.age != null ? <Text span c="dimmed" size="xs"> ({row.age})</Text> : null}</Text></Group></Table.Td><Table.Td fw={700}>{row.total}</Table.Td>{dates.map((date) => <Table.Td key={date} ta="center"><Group gap={2} justify="center" wrap="nowrap">{(row.dates.get(date) || []).map((item, index) => <Text key={`${item.classId}-${index}`} span fw={800} style={{ color: colorFor(item.classId) }}>✓</Text>)}</Group></Table.Td>)}</Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>
+      <Paper radius="lg" withBorder className="report-grid-card"><Table.ScrollContainer minWidth={Math.max(680, 220 + dates.length * 44)}><Table className="attendance-grid-table" withColumnBorders striped><Table.Thead><Table.Tr><Table.Th className="report-sticky-name">Name</Table.Th><Table.Th>Total</Table.Th>{dates.map((date) => <Table.Th key={date} ta="center"><Text size="xs" fw={700}>{dayjs(date).format('MMM YYYY')}</Text><Text size="xs">{dayjs(date).format('D')}</Text></Table.Th>)}</Table.Tr></Table.Thead><Table.Tbody>{rows.map((row) => <Table.Tr key={row.id}><Table.Td className="report-sticky-name"><Group gap={4} wrap="nowrap"><Group gap={2}>{row.enrolledClasses.map((item) => <span key={item.id} className="report-class-dot" style={{ background: colorFor(item.id) }} />)}</Group><Text size="sm" fw={650}>{row.name}{row.age != null ? <Text span c="dimmed" size="xs"> ({row.age})</Text> : null}</Text></Group></Table.Td><Table.Td fw={700}>{row.total}</Table.Td>{dates.map((date) => <Table.Td key={date} ta="center"><Group gap={2} justify="center" wrap="nowrap">{(row.dates.get(date) || []).map((item, index) => <Text key={`${item.classId}-${index}`} span fw={800} aria-label={`Present for ${item.className}${item.walkIn ? ' as walk-in' : ''}`} title={`${item.className}${item.walkIn ? ' · walk-in' : ''}`} style={{ color: colorFor(item.classId) }}>✓</Text>)}</Group></Table.Td>)}</Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>
     </>}
-    {loading && <Text c="dimmed" mt="md">Refreshing report…</Text>}
   </>
 }
 

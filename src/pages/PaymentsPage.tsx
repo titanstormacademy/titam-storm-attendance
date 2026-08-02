@@ -40,17 +40,24 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   const submitLock = useRef(false)
   const formSnapshot = paymentSnapshot({ paymentId, studentId, feeMonths, amount, method, status, dateReceived, referenceNo, coachId, remarks, receiptPath })
   const dirty = formOpened && (Boolean(receipt) || formSnapshot !== formBaseline)
+  const paymentValidation = amount === '' || !status ? '' : status === 'Unpaid' && Number(amount) > 0 ? 'Unpaid records must have RM0 received.' : status !== 'Unpaid' && Number(amount) <= 0 ? `${status} records require an amount greater than RM0.` : ''
   const { confirmDiscard } = useNavigationGuard('payment-editor', { dirty, pending: saving })
 
   const periodPayments = data.payments.filter((payment) => periodMode === 'month' ? payment.fee_month.startsWith(period) : payment.fee_month.startsWith(year))
   const collected = periodPayments.filter((payment) => payment.status !== 'Unpaid').reduce((sum, payment) => sum + Number(payment.amount), 0)
-  const paidIds = new Set(periodPayments.filter((payment) => payment.status === 'Paid').map((payment) => payment.student_id))
   const enrolledIds = new Set(data.enrollments.filter((item) => !item.end_date).map((item) => item.student_id))
   const activeEnrolled = data.students.filter((student) => student.status === 'Active' && enrolledIds.has(student.id))
+  const paidIds = new Set(activeEnrolled.filter((student) => isStudentSettledForPeriod(data, student, periodMode, period, year)).map((student) => student.id))
   const arrears = useMemo(() => calculateArrears(data), [data])
   const outstandingStudents = activeEnrolled.filter((student) => (arrears.get(student.id)?.months.length || 0) > 0)
   const outstandingAmount = outstandingStudents.reduce((sum, student) => sum + (arrears.get(student.id)?.amount || 0), 0)
-  const months = useMemo(() => Array.from({ length: 24 }, (_, index) => dayjs().subtract(15, 'month').add(index, 'month')).map((date) => ({ value: date.format('YYYY-MM'), label: date.format('MMMM YYYY') })).reverse(), [])
+  const months = useMemo(() => {
+    const starts = data.enrollments.map((item) => dayjs(item.start_date).startOf('month')).filter((date) => date.isValid())
+    const earliest = starts.length ? starts.sort((a, b) => a.valueOf() - b.valueOf())[0] : dayjs().subtract(15, 'month').startOf('month')
+    const latest = dayjs().add(8, 'month').startOf('month')
+    const count = Math.min(180, latest.diff(earliest, 'month') + 1)
+    return Array.from({ length: Math.max(1, count) }, (_, index) => earliest.add(index, 'month')).map((date) => ({ value: date.format('YYYY-MM'), label: date.format('MMMM YYYY') })).reverse()
+  }, [data.enrollments])
   const years = Array.from({ length: 6 }, (_, index) => String(dayjs().year() - index))
   const history = selectedStudent ? data.payments.filter((payment) => payment.student_id === selectedStudent.id).sort((a, b) => b.fee_month.localeCompare(a.fee_month) || b.id - a.id) : []
 
@@ -109,6 +116,7 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
 
   async function submit() {
     if (!studentId || !feeMonths.length || amount === '' || !method || !status || !dateReceived || submitLock.current) return
+    if (paymentValidation) { notifications.show({ color: 'red', message: paymentValidation }); return }
     submitLock.current = true
     let uploadedReceiptPath: string | null = null
     let committed = false
@@ -140,6 +148,11 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
     }
   }
 
+  async function viewReceipt(path: string) {
+    try { await openReceipt(path) }
+    catch (error) { notifications.show({ color: 'red', title: 'Could not open receipt', message: errorMessage(error) }) }
+  }
+
   async function remove(payment: Payment) {
     if (!window.confirm(`Delete the ${dayjs(payment.fee_month).format('MMMM YYYY')} payment?`)) return
     try {
@@ -156,7 +169,7 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
     <>
       <PageHeader title="Payments" description="Student fees, receipts, payment history, and outstanding months" action={<Group><SegmentedControl value={periodMode} onChange={(value) => setPeriodMode(value as 'month' | 'year')} data={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} />{periodMode === 'month' ? <Select value={period} onChange={(value) => setPeriod(value || dayjs().format('YYYY-MM'))} data={months} w={180} /> : <Select value={year} onChange={(value) => setYear(value || dayjs().format('YYYY'))} data={years} w={120} />}<Button leftSection={<IconPlus size={17} />} onClick={() => openNew()}>Record payment</Button></Group>} />
       <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }} mb="xl">
-        <StatCard label="Collected" value={`RM ${money(collected)}`} detail={periodMode === 'month' ? dayjs(`${period}-01`).format('MMMM YYYY') : year} icon={IconCash} color="green" />
+        <StatCard label="Applied to fees" value={`RM ${money(collected)}`} detail={periodMode === 'month' ? dayjs(`${period}-01`).format('MMMM YYYY') : year} icon={IconCash} color="green" />
         <StatCard label="Fully paid" value={paidIds.size} detail={`${activeEnrolled.length} active enrolled students`} icon={IconCheck} color="blue" />
         <StatCard label="All-time outstanding" value={`RM ${money(outstandingAmount)}`} detail={`${outstandingStudents.length} students · from enrollment start`} icon={IconAlertCircle} color="red" />
       </SimpleGrid>
@@ -166,12 +179,12 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
         <Stack hiddenFrom="md" p="md" gap="sm">{activeEnrolled.map((student) => <PaymentCard key={student.id} student={student} payments={periodPayments.filter((payment) => payment.student_id === student.id)} arrears={arrears.get(student.id)} onHistory={() => showHistory(student)} onAdd={() => openNew(student)} />)}</Stack>
         <Box visibleFrom="md"><Table.ScrollContainer minWidth={820}><Table verticalSpacing="sm" horizontalSpacing="lg" highlightOnHover><Table.Thead><Table.Tr><Table.Th>Student</Table.Th><Table.Th>Monthly fee</Table.Th><Table.Th>Status</Table.Th><Table.Th>Received</Table.Th><Table.Th>Method / reference</Table.Th><Table.Th>Outstanding</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{activeEnrolled.map((student) => {
           const rows = periodPayments.filter((payment) => payment.student_id === student.id); const best = bestPayment(rows); const total = rows.filter((payment) => payment.status !== 'Unpaid').reduce((sum, payment) => sum + Number(payment.amount), 0); const due = arrears.get(student.id)
-          return <Table.Tr key={student.id} onClick={() => showHistory(student)} style={{ cursor: 'pointer' }}><Table.Td><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={42} /><Box><Text fw={700}>{student.name}</Text><Text size="xs" c="dimmed">{student.student_phone || student.parent_contact || 'No phone'}</Text></Box></Group></Table.Td><Table.Td>RM {money(student.monthly_fee || 0)}</Table.Td><Table.Td><StatusBadge status={best?.status} /></Table.Td><Table.Td><Text fw={650}>RM {money(total)}</Text><Text size="xs" c="dimmed">{best?.date_received ? dayjs(best.date_received).format('D MMM YYYY') : '—'}</Text></Table.Td><Table.Td><Text size="sm">{best?.method || '—'}</Text><Text size="xs" c="dimmed">{best?.reference_no || 'No reference'}</Text></Table.Td><Table.Td><Text fw={650}>{due?.months.length || 0} months</Text><Text size="xs" c="dimmed">RM {money(due?.amount || 0)}</Text></Table.Td><Table.Td><Button variant="light" size="xs" onClick={(event) => { event.stopPropagation(); openNew(student) }}>Add</Button></Table.Td></Table.Tr>
+          return <Table.Tr key={student.id}><Table.Td><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={42} /><Box><Text fw={700}>{student.name}</Text><Text size="xs" c="dimmed">{student.student_phone || student.parent_contact || 'No phone'}</Text></Box></Group></Table.Td><Table.Td>RM {money(student.monthly_fee || 0)}</Table.Td><Table.Td><StatusBadge status={best?.status} /></Table.Td><Table.Td><Text fw={650}>RM {money(total)}</Text><Text size="xs" c="dimmed">{best?.date_received ? dayjs(best.date_received).format('D MMM YYYY') : '—'}</Text></Table.Td><Table.Td><Text size="sm">{best?.method || '—'}</Text><Text size="xs" c="dimmed">{best?.reference_no || 'No reference'}</Text></Table.Td><Table.Td><Text fw={650}>{due?.months.length || 0} months</Text><Text size="xs" c="dimmed">RM {money(due?.amount || 0)}</Text></Table.Td><Table.Td><Group gap="xs" wrap="nowrap"><Button variant="subtle" size="xs" onClick={() => showHistory(student)}>History</Button><Button variant="light" size="xs" onClick={() => openNew(student)}>Add</Button></Group></Table.Td></Table.Tr>
         })}</Table.Tbody></Table></Table.ScrollContainer></Box>
       </Paper>
 
       <Modal opened={historyOpened} onClose={historyModal.close} title={`${selectedStudent?.name || ''} payment history`} size="lg" centered>
-        <Stack>{history.length ? history.map((payment) => <Paper key={payment.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><Box><Group gap="xs"><Text fw={800}>{dayjs(payment.fee_month).format('MMMM YYYY')}</Text><StatusBadge status={payment.status} />{payment.commission_settled && <Badge color="violet" variant="light">Commission settled</Badge>}</Group><Text size="sm" c="dimmed" mt={4}>{payment.method || 'No method'} · {payment.date_received ? dayjs(payment.date_received).format('D MMM YYYY') : 'No received date'}</Text></Box><Text fw={850}>RM {money(payment.amount)}</Text></Group><Text size="sm" mt="sm">Reference: {payment.reference_no || '—'}</Text>{payment.remarks && <Text size="sm" c="dimmed">{payment.remarks}</Text>}<Group mt="md"><Button variant="light" leftSection={<IconEdit size={16} />} onClick={() => editPayment(payment)}>Edit</Button>{payment.receipt_path && <Button variant="light" color="blue" leftSection={<IconEye size={16} />} onClick={() => openReceipt(payment.receipt_path!)}>Receipt</Button>}<Button variant="light" color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(payment)}>Delete</Button></Group></Paper>) : <Text c="dimmed" ta="center" py="xl">No payments recorded.</Text>}<Button leftSection={<IconPlus size={16} />} onClick={() => selectedStudent && openNew(selectedStudent)}>Add payment</Button></Stack>
+        <Stack>{history.length ? history.map((payment) => <Paper key={payment.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><Box><Group gap="xs"><Text fw={800}>{dayjs(payment.fee_month).format('MMMM YYYY')}</Text><StatusBadge status={payment.status} />{payment.commission_settled && <Badge color="violet" variant="light">Commission settled</Badge>}</Group><Text size="sm" c="dimmed" mt={4}>{payment.method || 'No method'} · {payment.date_received ? dayjs(payment.date_received).format('D MMM YYYY') : 'No received date'}</Text></Box><Text fw={850}>RM {money(payment.amount)}</Text></Group><Text size="sm" mt="sm">Reference: {payment.reference_no || '—'}</Text>{payment.remarks && <Text size="sm" c="dimmed">{payment.remarks}</Text>}<Group mt="md"><Button variant="light" leftSection={<IconEdit size={16} />} onClick={() => editPayment(payment)}>Edit</Button>{payment.receipt_path && <Button variant="light" color="blue" leftSection={<IconEye size={16} />} onClick={() => viewReceipt(payment.receipt_path!)}>Receipt</Button>}<Button variant="light" color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(payment)}>Delete</Button></Group></Paper>) : <Text c="dimmed" ta="center" py="xl">No payments recorded.</Text>}<Button leftSection={<IconPlus size={16} />} onClick={() => selectedStudent && openNew(selectedStudent)}>Add payment</Button></Stack>
       </Modal>
 
       <Modal opened={formOpened} onClose={closeForm} title={paymentId ? 'Edit payment' : 'Record student payment'} size="lg" centered>
@@ -183,11 +196,12 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
           <Grid><Grid.Col span={{ base: 12, xs: 6 }}><TextInput label="Reference number" value={referenceNo} onChange={(event) => setReferenceNo(event.currentTarget.value)} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6 }}><Select label="Coach for commission" clearable value={coachId} onChange={setCoachId} data={data.coaches.filter((coach) => coach.coach_type === 'Head').map((coach) => ({ value: String(coach.id), label: coach.name }))} /></Grid.Col></Grid>
           <Textarea label="Remarks" description="Include registration fees or adjustments here." value={remarks} onChange={(event) => setRemarks(event.currentTarget.value)} />
           <FileInput label="Receipt" accept="image/png,image/jpeg,image/webp" value={receipt} onChange={handleReceipt} leftSection={<IconReceipt size={16} />} clearable />
-          {receiptPath && !receipt && <Button variant="light" leftSection={<IconEye size={16} />} onClick={() => openReceipt(receiptPath)}>View current receipt</Button>}
+          {receiptPath && !receipt && <Button variant="light" leftSection={<IconEye size={16} />} onClick={() => viewReceipt(receiptPath)}>View current receipt</Button>}
           {ocrMessage && <Alert icon={<IconRobot size={17} />} color={ocrMessage.startsWith('OCR unavailable') ? 'orange' : 'blue'}>{ocrMessage}</Alert>}
-          {!paymentId && feeMonths.length > 1 && <Alert color="blue">The latest month stores the full amount and reference. Earlier months remain separate Paid commission units.</Alert>}
+          {paymentValidation && <Alert color="red">{paymentValidation}</Alert>}
+          {!paymentId && feeMonths.length > 1 && <Alert color="blue">The latest month stores the full amount and reference. Earlier months are recorded separately with the selected {status || 'payment'} status.</Alert>}
           {paymentId && data.payments.find((payment) => payment.id === paymentId)?.commission_settled && <Alert color="violet">This payment is linked to a settled coach payout. Editing it does not recalculate historical payout lines.</Alert>}
-          <Group className="modal-actions" justify="flex-end"><Button variant="default" disabled={saving} onClick={closeForm}>Cancel</Button><Button onClick={submit} loading={saving} disabled={!studentId || !feeMonths.length || amount === ''}>Save payment</Button></Group>
+          <Group className="modal-actions" justify="flex-end"><Button variant="default" disabled={saving} onClick={closeForm}>Cancel</Button><Button onClick={submit} loading={saving} disabled={!studentId || !feeMonths.length || amount === '' || Boolean(paymentValidation)}>Save payment</Button></Group>
         </Stack>
       </Modal>
     </>
@@ -196,7 +210,7 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
 
 function PaymentCard({ student, payments, arrears, onHistory, onAdd }: { student: Student; payments: Payment[]; arrears?: { months: string[]; amount: number }; onHistory: () => void; onAdd: () => void }) {
   const best = bestPayment(payments); const total = payments.filter((payment) => payment.status !== 'Unpaid').reduce((sum, payment) => sum + Number(payment.amount), 0)
-  return <Paper p="md" radius="md" withBorder><Group justify="space-between" align="flex-start" wrap="nowrap"><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={48} /><Box><Text fw={800}>{student.name}</Text><Text size="xs" c="dimmed">{student.student_phone || student.parent_contact || 'No phone'}</Text><Text size="xs" c="dimmed">RM {money(student.monthly_fee || 0)} / month</Text></Box></Group><StatusBadge status={best?.status} /></Group><SimpleGrid cols={2} mt="md"><Box><Text size="xs" c="dimmed">Received</Text><Text fw={700}>RM {money(total)}</Text></Box><Box><Text size="xs" c="dimmed">Outstanding</Text><Text fw={700}>{arrears?.months.length || 0} months</Text><Text size="xs" c="dimmed">RM {money(arrears?.amount || 0)}</Text></Box></SimpleGrid><Group grow mt="md"><Button variant="light" leftSection={<IconHistory size={16} />} onClick={onHistory}>History</Button><Button leftSection={<IconPlus size={16} />} onClick={onAdd}>Add</Button></Group></Paper>
+  return <Paper p="md" radius="md" withBorder><Group justify="space-between" align="flex-start" wrap="nowrap"><Group wrap="nowrap" style={{ minWidth: 0 }}><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={48} /><Box style={{ minWidth: 0 }}><Text fw={800} truncate>{student.name}</Text><Text size="xs" c="dimmed" truncate>{student.student_phone || student.parent_contact || 'No phone'}</Text><Text size="xs" c="dimmed">RM {money(student.monthly_fee || 0)} / month</Text></Box></Group><StatusBadge status={best?.status} /></Group><SimpleGrid cols={2} mt="md"><Box><Text size="xs" c="dimmed">Received</Text><Text fw={700}>RM {money(total)}</Text></Box><Box><Text size="xs" c="dimmed">Outstanding</Text><Text fw={700}>{arrears?.months.length || 0} months</Text><Text size="xs" c="dimmed">RM {money(arrears?.amount || 0)}</Text></Box></SimpleGrid><Group grow mt="md"><Button variant="light" leftSection={<IconHistory size={16} />} onClick={onHistory}>History</Button><Button leftSection={<IconPlus size={16} />} onClick={onAdd}>Add</Button></Group></Paper>
 }
 
 function StatusBadge({ status }: { status?: PaymentStatus }) {
@@ -207,26 +221,39 @@ function bestPayment(rows: Payment[]) {
   return rows.find((payment) => payment.status === 'Paid') || rows.find((payment) => payment.status === 'Partial') || rows[0]
 }
 
+function dueMonthsForStudent(data: BootstrapData, studentId: number) {
+  const due = new Set<string>()
+  const current = dayjs().startOf('month')
+  data.enrollments.filter((item) => item.student_id === studentId).forEach((period) => {
+    let cursor = dayjs(period.start_date).startOf('month')
+    const end = period.end_date ? dayjs(period.end_date).startOf('month') : current
+    if (!cursor.isValid() || !end.isValid()) return
+    const boundedEnd = end.isAfter(current) ? current : end
+    while (cursor.isBefore(boundedEnd) || cursor.isSame(boundedEnd, 'month')) {
+      due.add(cursor.format('YYYY-MM'))
+      cursor = cursor.add(1, 'month')
+    }
+  })
+  return [...due].sort()
+}
+
+function monthOutstanding(data: BootstrapData, student: Student, month: string) {
+  const rows = data.payments.filter((payment) => payment.student_id === student.id && payment.fee_month.startsWith(month))
+  if (rows.some((payment) => payment.status === 'Paid')) return 0
+  const received = rows.filter((payment) => payment.status === 'Partial').reduce((sum, payment) => sum + Number(payment.amount), 0)
+  return Math.max(0, Number(student.monthly_fee || 0) - received)
+}
+
+function isStudentSettledForPeriod(data: BootstrapData, student: Student, mode: 'month' | 'year', period: string, year: string) {
+  const due = dueMonthsForStudent(data, student.id).filter((month) => mode === 'month' ? month === period : month.startsWith(year))
+  return due.length > 0 && due.every((month) => monthOutstanding(data, student, month) === 0)
+}
+
 function calculateArrears(data: BootstrapData) {
   const result = new Map<number, { months: string[]; amount: number }>()
-  const current = dayjs().startOf('month')
   data.students.forEach((student) => {
-    const periods = data.enrollments.filter((item) => item.student_id === student.id)
-    if (!periods.length) return
-    const due = new Set<string>()
-    periods.forEach((period) => {
-      let cursor = dayjs(period.start_date).startOf('month')
-      const end = period.end_date ? dayjs(period.end_date).startOf('month') : current
-      if (!cursor.isValid() || !end.isValid()) return
-      const boundedEnd = end.isAfter(current) ? current : end
-      while (cursor.isBefore(boundedEnd) || cursor.isSame(boundedEnd, 'month')) {
-        due.add(cursor.format('YYYY-MM'))
-        cursor = cursor.add(1, 'month')
-      }
-    })
-    const paid = new Set(data.payments.filter((payment) => payment.student_id === student.id && payment.status === 'Paid').map((payment) => payment.fee_month.slice(0, 7)))
-    const unpaid = [...due].filter((month) => !paid.has(month)).sort()
-    result.set(student.id, { months: unpaid, amount: unpaid.length * Number(student.monthly_fee || 0) })
+    const balances = dueMonthsForStudent(data, student.id).map((month) => ({ month, amount: monthOutstanding(data, student, month) })).filter((item) => item.amount > 0)
+    result.set(student.id, { months: balances.map((item) => item.month), amount: balances.reduce((sum, item) => sum + item.amount, 0) })
   })
   return result
 }

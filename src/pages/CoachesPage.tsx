@@ -5,7 +5,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconAlertTriangle, IconCamera, IconCash, IconClock, IconEdit, IconMessageCircle, IconPlus, IconReceiptRefund, IconTrash, IconUserStar } from '@tabler/icons-react'
 import { deleteCoach, getCoachPayments, getCommission, recordCoachPayout, removeUploadedImage, saveCoach, undoCoachPayout, uploadImage } from '../lib/api'
-import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
+import { EmptyState, PageHeader, PageLoader, PersonAvatar, PhotoLightbox } from '../components/ui'
 import { publicImageUrl } from '../lib/supabase'
 import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { BootstrapData, Coach, CoachPayment, CommissionSummary } from '../types/models'
@@ -106,6 +106,8 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
     setZeroAmountReviewed(false)
     setCommission(null)
     setHistory([])
+    setPayoutAmount('')
+    setPayoutRemarks('')
     setLoading(true)
     payoutModal.open()
     try {
@@ -170,6 +172,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
     try {
       await undoCoachPayout(payment.id)
       if (coach) await openPayout(coach, month)
+      await onChanged()
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
@@ -208,6 +211,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
 
       <Modal opened={payoutOpened} onClose={closePayout} title={`${coach?.name || ''} payout`} size="xl" centered>
         <Stack>
+          {loading && !commission ? <PageLoader label="Loading payout details…" /> : <>
           {coach?.coach_type === 'Assistant' && <Select label="Pay month" value={month} onChange={changeMonth} disabled={loading} data={Array.from({ length: 18 }, (_, index) => dayjs().subtract(index, 'month')).map((date) => ({ value: date.format('YYYY-MM'), label: date.format('MMMM YYYY') }))} w={{ base: '100%', sm: 220 }} allowDeselect={false} />}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <Summary label={coach?.coach_type === 'Head' ? 'Unsettled units' : 'Hours worked'} value={String(coach?.coach_type === 'Head' ? commission?.units || 0 : commission?.hours || 0)} icon={coach?.coach_type === 'Head' ? <IconReceiptRefund size={20} /> : <IconClock size={20} />} />
@@ -219,7 +223,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
           <Paper p="md" radius="lg" withBorder>
             <Grid align="end">
               <Grid.Col span={{ base: 12, sm: 3 }}><TextInput type="date" label="Payout date" value={payoutDate} onChange={(event) => setPayoutDate(event.currentTarget.value)} required /></Grid.Col>
-              <Grid.Col span={{ base: 12, sm: 3 }}><NumberInput label="Amount paid (RM)" value={payoutAmount} onChange={(value) => { setPayoutAmount(value); setZeroAmountReviewed(false) }} min={0} decimalScale={2} /></Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 3 }}><NumberInput label="Amount paid (RM)" description="Calculated from the eligible units below" value={payoutAmount} readOnly min={0} decimalScale={2} /></Grid.Col>
               <Grid.Col span={{ base: 12, sm: 4 }}><Textarea label="Remarks" value={payoutRemarks} onChange={(event) => setPayoutRemarks(event.currentTarget.value)} autosize minRows={1} /></Grid.Col>
               <Grid.Col span={{ base: 12, sm: 2 }}><Button fullWidth onClick={submitPayout} loading={loading} disabled={payoutAmount === '' || !payoutDate || (Number(payoutAmount) === 0 && (!eligibleUnits || !zeroAmountReviewed))}>Record payout</Button></Grid.Col>
             </Grid>
@@ -231,6 +235,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
             <Box visibleFrom="sm"><Table.ScrollContainer minWidth={720}><Table verticalSpacing="sm"><Table.Thead><Table.Tr><Table.Th>Date</Table.Th><Table.Th>Type / period</Table.Th><Table.Th>Units / hours</Table.Th><Table.Th>Amount</Table.Th><Table.Th>Remarks</Table.Th><Table.Th /></Table.Tr></Table.Thead><Table.Tbody>{history.map((payment) => <Table.Tr key={payment.id}><Table.Td>{dayjs(payment.date_paid).format('D MMM YYYY')}</Table.Td><Table.Td><Text size="sm">{payment.payout_type}</Text><Text size="xs" c="dimmed">{payment.pay_month ? dayjs(payment.pay_month).format('MMMM YYYY') : 'Unsettled commission'}</Text></Table.Td><Table.Td>{payment.units}</Table.Td><Table.Td>RM {money(payment.amount)}</Table.Td><Table.Td>{payment.remarks || '—'}</Table.Td><Table.Td><Button size="xs" variant="subtle" color="red" onClick={() => undo(payment)}>Undo</Button></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Box>
             <Stack hiddenFrom="sm" p="sm" gap="sm">{history.length ? history.map((payment) => <Paper key={payment.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><div><Text fw={750}>{dayjs(payment.date_paid).format('D MMM YYYY')}</Text><Text size="xs" c="dimmed">{payment.payout_type}{payment.pay_month ? ` · ${dayjs(payment.pay_month).format('MMMM YYYY')}` : ''}</Text></div><Text fw={800}>RM {money(payment.amount)}</Text></Group><Group gap="xs" mt="sm"><Badge variant="light">{payment.units} {payment.payout_type === 'Assistant' ? 'hours' : 'units'}</Badge>{payment.remarks && <Text size="sm" c="dimmed">{payment.remarks}</Text>}</Group><Button mt="sm" size="xs" variant="light" color="red" onClick={() => undo(payment)}>Undo payout</Button></Paper>) : <Text c="dimmed" size="sm" p="sm">No payout history.</Text>}</Stack>
           </Paper>
+          </>}
         </Stack>
       </Modal>
       <PhotoLightbox src={photoView?.src || null} name={photoView?.name || 'Coach photo'} opened={Boolean(photoView)} onClose={() => setPhotoView(null)} />

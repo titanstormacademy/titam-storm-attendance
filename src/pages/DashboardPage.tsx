@@ -20,11 +20,11 @@ export function DashboardPage({ data, branchName, isAdmin, onAttendance }: { dat
   return (
     <>
       <PageHeader title={`Good ${greeting()}, team`} description={`${branchName} · ${today.format('dddd, D MMMM YYYY')}`} />
-      <SimpleGrid className="dashboard-stats" cols={{ base: 2, lg: 4 }} spacing={{ base: 'sm', sm: 'md' }} mb="xl">
+      <SimpleGrid className="dashboard-stats" cols={{ base: 1, xs: 2, lg: 4 }} spacing={{ base: 'sm', sm: 'md' }} mb="xl">
         <StatCard label="Active students" value={activeStudents.length} detail={`${data.students.filter((student) => student.status === 'Trial').length} currently on trial`} icon={IconUsers} />
         <StatCard label="Today's classes" value={todayClasses.length} detail={`${todayClasses.reduce((sum, item) => sum + new Set(data.enrollments.filter((enrollment) => enrollment.class_id === item.id && !enrollment.end_date).map((enrollment) => enrollment.student_id)).size, 0)} scheduled students`} icon={IconCalendarEvent} color="blue" />
         {isAdmin && <StatCard label="Fees this month" value={`RM ${monthRevenue.toLocaleString('en-MY', { minimumFractionDigits: 0 })}`} detail={`${paidStudents} students paid`} icon={IconCash} color="green" />}
-        <StatCard label="Attendance records" value={data.sessions.filter((session) => session.session_date === todayDate).length} detail="Sessions ready today" icon={IconClipboardCheck} color="violet" />
+        <StatCard label="Today's sessions" value={data.sessions.filter((session) => session.session_date === todayDate).length} detail="Sessions ready today" icon={IconClipboardCheck} color="violet" />
       </SimpleGrid>
 
       <Grid gutter="xl">
@@ -36,10 +36,10 @@ export function DashboardPage({ data, branchName, isAdmin, onAttendance }: { dat
                 const enrolled = new Set(data.enrollments.filter((enrollment) => enrollment.class_id === academyClass.id && !enrollment.end_date).map((enrollment) => enrollment.student_id)).size
                 const session = data.sessions.find((item) => item.class_id === academyClass.id && item.session_date === todayDate)
                 return (
-                  <Paper key={academyClass.id} p="lg" radius="lg" withBorder className="schedule-row" onClick={onAttendance}>
+                  <Paper key={academyClass.id} component="button" type="button" p="lg" radius="lg" withBorder className="schedule-row" onClick={onAttendance} aria-label={`Open attendance for ${academyClass.label}`}>
                     <Group wrap="nowrap">
                       <ThemeIcon size={50} radius="md" variant="light" color="orange"><IconBallBasketball size={26} /></ThemeIcon>
-                      <Box flex={1}>
+                      <Box flex={1} style={{ minWidth: 0 }}>
                         <Group gap="xs"><Text fw={750}>{academyClass.label}</Text><Badge variant="light" color={session ? 'green' : 'gray'}>{session ? 'Ready' : 'Not started'}</Badge></Group>
                         <Text c="dimmed" size="sm" mt={4}>{formatTime(academyClass.start_time)} – {formatTime(academyClass.end_time)} · {academyClass.coach?.name || 'No coach assigned'}</Text>
                       </Box>

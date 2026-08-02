@@ -207,6 +207,9 @@ select {
 
 .schedule-row,
 .student-card-button {
+  width: 100%;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -216,7 +219,8 @@ select {
   text-align: left;
 }
 
-.student-card-button:focus-visible {
+.student-card-button:focus-visible,
+.schedule-row:focus-visible {
   outline: 3px solid rgba(245, 138, 35, 0.42);
   outline-offset: 2px;
 }
@@ -252,7 +256,7 @@ select {
 
 .student-directory-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
@@ -535,12 +539,12 @@ select {
 .login-enter-button {
   min-height: 44px;
   margin-top: 8px;
-  background: #e93243;
+  background: #ce2637;
   box-shadow: 0 10px 24px -14px rgba(233, 50, 67, 0.75);
 }
 
 .login-enter-button:hover {
-  background: #ce2637;
+  background: #ad1f2d;
 }
 
 .login-access-hint {
@@ -633,7 +637,7 @@ select {
 
 .attendance-date-pills button {
   flex: 0 0 auto;
-  min-height: 38px;
+  min-height: 44px;
   padding: 8px 16px;
   border: 1px solid #e5e8ee;
   border-radius: 999px;
@@ -651,9 +655,9 @@ select {
 
 .attendance-date-pills button.active {
   color: white;
-  background: #f26522;
-  border-color: #f26522;
-  box-shadow: 0 8px 20px -10px rgba(242, 101, 34, 0.7);
+  background: #b74117;
+  border-color: #b74117;
+  box-shadow: 0 8px 20px -10px rgba(183, 65, 23, 0.7);
 }
 
 .attendance-section-label,
@@ -760,7 +764,7 @@ select {
 
 .walkin-level-filters button {
   flex: 0 0 auto;
-  min-height: 34px;
+  min-height: 44px;
   padding: 6px 16px;
   border: 1px solid #e5e8ee;
   border-radius: 999px;
@@ -936,8 +940,8 @@ select {
 }
 
 .mobile-nav button.active {
-  color: #d4531f;
-  background: #fff4ed;
+  color: white;
+  background: #8f3315;
 }
 
 .mobile-nav button:focus-visible,
@@ -1335,6 +1339,15 @@ select {
   .page-header-action > .mantine-Group-root > * {
     width: 100% !important;
     flex-basis: 100%;
+  }
+
+  .attendance-student-card > .mantine-Group-root {
+    flex-wrap: wrap;
+  }
+
+  .attendance-student-card .attendance-present-button {
+    min-width: 0;
+    flex: 1 0 100%;
   }
 }
 

@@ -71,7 +71,10 @@ export default function App() {
     }
   }, [activeBranches, branchId, settingsQuery.data?.default_branch_id])
 
-  useEffect(() => { pageRef.current = page }, [page])
+  useEffect(() => {
+    pageRef.current = page
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.page-header h1')?.focus({ preventScroll: true }))
+  }, [page])
 
   useEffect(() => {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colorScheme === 'dark' ? '#0b1220' : '#101b33')
@@ -126,7 +129,14 @@ export default function App() {
   const activeBranch = branches.find((branch) => branch.id === branchId)
 
   async function refreshAll() {
-    await Promise.all([dataQuery.refetch(), branchesQuery.refetch(), settingsQuery.refetch()])
+    const results = await Promise.all([dataQuery.refetch(), branchesQuery.refetch(), settingsQuery.refetch()])
+    const error = results.find((result) => result.error)?.error
+    if (error) throw error
+  }
+
+  async function refreshData() {
+    const result = await dataQuery.refetch()
+    if (result.error) throw result.error
   }
 
   function navigate(nextPage: PageKey) {
@@ -191,6 +201,7 @@ export default function App() {
   if (authLoading) return <Center h="100vh"><Stack align="center"><ThemeIcon size={64} radius={20}><IconBallBasketball size={36} /></ThemeIcon><Text fw={700}>{user ? 'Completing sign-in…' : 'Loading Titan Storm…'}</Text></Stack></Center>
   if (!user) return <LoginPage />
   if (!profile) return <Center h="100vh"><Alert color="red" icon={<IconAlertCircle size={18} />}>Your user profile could not be loaded. Ask an administrator to verify the database migration.</Alert></Center>
+  if (branchesQuery.isError) return <QueryFailure title="Could not load branch access" error={branchesQuery.error} onRetry={() => branchesQuery.refetch()} />
   if (!branchesQuery.isLoading && !activeBranches.length) return <Center h="100vh"><Paper p="xl" radius="lg" withBorder ta="center"><IconBuilding size={36} /><Title order={3} mt="md">No branch access yet</Title><Text c="dimmed" maw={420} mt="xs">Your account is ready, but an administrator must assign you to at least one branch.</Text><Button mt="lg" variant="light" onClick={signOut}>Sign out</Button></Paper></Center>
 
   const logoUrl = publicImageUrl('academy-assets', settingsQuery.data?.logo_path || null)
@@ -240,9 +251,9 @@ export default function App() {
 
       <AppShell.Main className="app-main">
         <Box maw={1500} mx="auto">
-          {dataQuery.isLoading || !dataQuery.data ? <PageLoader /> : <Suspense fallback={<PageLoader />}><Box key={`${page}-${branchId}`} className="page-transition">{renderPage(page, {
+          {dataQuery.isError ? <QueryFailure title="Could not load academy data" error={dataQuery.error} onRetry={() => dataQuery.refetch()} /> : page === 'settings' && settingsQuery.isError ? <QueryFailure title="Could not load academy settings" error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} /> : dataQuery.isLoading || !dataQuery.data || (page === 'settings' && settingsQuery.isLoading) ? <PageLoader label={page === 'settings' ? 'Loading settings…' : 'Loading academy data…'} /> : <Suspense fallback={<PageLoader />}><Box key={`${page}-${branchId}`} className="page-transition">{renderPage(page, {
             branchId: branchId!, branchName: activeBranch?.name || '', data: dataQuery.data, isAdmin: Boolean(isAdmin),
-            onChanged: async () => { await dataQuery.refetch() }, refreshAll,
+            onChanged: refreshData, refreshAll,
             navigate, registerStudentFromAttendance, studentCreateRequest, onStudentCreateHandled: () => setStudentCreateRequest(0), branches, settings: settingsQuery.data || { academy_name: 'Titan Storm', logo_path: null, default_branch_id: branchId },
           })}</Box></Suspense>}
         </Box>
@@ -282,6 +293,10 @@ function renderPage(page: PageKey, props: PageProps) {
     case 'settings': return <SettingsPage branches={props.branches} settings={props.settings} onChanged={props.refreshAll} />
     default: return <DashboardPage data={props.data} branchName={props.branchName} isAdmin={props.isAdmin} onAttendance={() => props.navigate('attendance')} />
   }
+}
+
+function QueryFailure({ title, error, onRetry }: { title: string; error: unknown; onRetry: () => Promise<unknown> }) {
+  return <Center mih={320} p="xl"><Paper p="xl" radius="lg" withBorder maw={520}><Alert color="red" icon={<IconAlertCircle size={18} />} title={title}>{error instanceof Error ? error.message : 'Please check your connection and try again.'}</Alert><Button mt="lg" onClick={() => onRetry()}>Retry</Button></Paper></Center>
 }
 
 function ConfigurationRequired() {
