@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AppShell, Avatar, Box, Button, Center, Group, Image, Menu, NavLink, Paper, Select, Stack, Text, ThemeIcon, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
@@ -8,6 +8,7 @@ import { getAcademySettings, getBootstrapData, getBranches } from './lib/api'
 import { isSupabaseConfigured, publicImageUrl } from './lib/supabase'
 import { PageLoader } from './components/ui'
 import { LoginPage } from './pages/LoginPage'
+import { useNavigationGuardContext } from './contexts/useNavigationGuard'
 import type { BootstrapData } from './types/models'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })))
@@ -41,7 +42,10 @@ const navigation: NavItem[] = [
 
 export default function App() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
-  const [page, setPage] = useState<PageKey>('dashboard')
+  const { confirmLeave } = useNavigationGuardContext()
+  const [page, setPage] = useState<PageKey>(() => pageFromHistory())
+  const pageRef = useRef(page)
+  const locationRef = useRef(currentUrl())
   const [studentCreateRequest, setStudentCreateRequest] = useState(0)
   const [navbarOpened, navbar] = useDisclosure(false)
   const [branchId, setBranchId] = useState<number | null>(() => {
@@ -65,6 +69,47 @@ export default function App() {
     }
   }, [activeBranches, branchId, settingsQuery.data?.default_branch_id])
 
+  useEffect(() => { pageRef.current = page }, [page])
+
+  useEffect(() => {
+    window.history.replaceState({ ...window.history.state, titanPage: pageRef.current }, '', window.location.href)
+  }, [])
+
+  useEffect(() => {
+    const handleLocationChange = (event: Event) => { locationRef.current = (event as CustomEvent<string>).detail }
+    const handlePopState = () => {
+      const previousUrl = locationRef.current
+      const nextPage = pageFromHistory()
+      if (navbarOpened && !window.history.state?.mobileNav) navbar.close()
+      if (nextPage === pageRef.current) {
+        locationRef.current = currentUrl()
+        return
+      }
+      if (!confirmLeave()) {
+        window.history.pushState({ titanPage: pageRef.current, guardRestored: true }, '', previousUrl)
+        locationRef.current = previousUrl
+        return
+      }
+      locationRef.current = currentUrl()
+      pageRef.current = nextPage
+      setPage(nextPage)
+      navbar.close()
+    }
+    window.addEventListener('titan-location-change', handleLocationChange)
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('titan-location-change', handleLocationChange)
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [confirmLeave, navbar, navbarOpened])
+
+  useEffect(() => {
+    if (isAdmin || !navigation.find((item) => item.key === page)?.admin) return
+    pageRef.current = 'dashboard'
+    setPage('dashboard')
+    window.history.replaceState({ titanPage: 'dashboard' }, '', pageUrl('dashboard'))
+  }, [isAdmin, page])
+
   const dataQuery = useQuery({
     queryKey: ['bootstrap', branchId, isAdmin],
     queryFn: () => getBootstrapData(branchId!, Boolean(isAdmin)),
@@ -79,13 +124,48 @@ export default function App() {
   }
 
   function navigate(nextPage: PageKey) {
+    if (nextPage === page || !confirmLeave()) return
+    if (window.history.state?.mobileNav) window.history.replaceState({ ...window.history.state, mobileNav: false }, '', pageUrl(page))
+    pageRef.current = nextPage
     setPage(nextPage)
+    window.history.pushState({ titanPage: nextPage }, '', pageUrl(nextPage))
+    locationRef.current = currentUrl()
     navbar.close()
   }
 
+  function changeBranch(value: string | null) {
+    if (!value || !confirmLeave()) return
+    const nextPage: PageKey = 'dashboard'
+    setBranchId(Number(value))
+    localStorage.setItem('titan-storm-branch', value)
+    pageRef.current = nextPage
+    setPage(nextPage)
+    window.history.pushState({ titanPage: nextPage }, '', pageUrl(nextPage))
+    locationRef.current = currentUrl()
+  }
+
+  async function guardedSignOut() {
+    if (confirmLeave()) await signOut()
+  }
+
+  function toggleNavigation() {
+    if (navbarOpened) {
+      if (window.history.state?.mobileNav) window.history.back()
+      else navbar.close()
+      return
+    }
+    window.history.pushState({ ...window.history.state, mobileNav: true }, '', window.location.href)
+    locationRef.current = currentUrl()
+    navbar.open()
+  }
+
   function registerStudentFromAttendance() {
+    if (!confirmLeave()) return
     setStudentCreateRequest((current) => current + 1)
+    pageRef.current = 'students'
     setPage('students')
+    window.history.pushState({ titanPage: 'students' }, '', pageUrl('students'))
+    locationRef.current = currentUrl()
     navbar.close()
   }
 
@@ -113,14 +193,14 @@ export default function App() {
             <Box visibleFrom="sm"><Text className="desktop-brand-name" fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text className="desktop-brand-subtitle" size="xs">Academy operations</Text></Box>
           </Group>
           <Group className="app-header-actions" gap="md" wrap="nowrap">
-            <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={(value) => { if (value) { setBranchId(Number(value)); localStorage.setItem('titan-storm-branch', value); setPage('dashboard') } }} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
+            <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={changeBranch} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
             <Menu position="bottom-end" shadow="lg">
               <Menu.Target>
                 <Button className="profile-menu-trigger" aria-label={`Open account menu for ${profile.full_name}`} variant="subtle" color="dark" px="xs" rightSection={<Box visibleFrom="sm"><IconChevronDown size={14} /></Box>}>
                   <Group gap="xs" wrap="nowrap"><Avatar name={profile.full_name} color="orange" size={32} /><Box visibleFrom="sm" ta="left"><Text size="sm" fw={700} lh={1}>{profile.full_name}</Text><Text size="xs" c="dimmed" mt={4}>{isAdmin ? 'Administrator' : 'Staff'}</Text></Box></Group>
                 </Button>
               </Menu.Target>
-              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={signOut}>Sign out</Menu.Item></Menu.Dropdown>
+              <Menu.Dropdown><Menu.Label>Account</Menu.Label><Menu.Item leftSection={<IconLogout size={16} />} color="red" onClick={guardedSignOut}>Sign out</Menu.Item></Menu.Dropdown>
             </Menu>
           </Group>
         </Group>
@@ -138,7 +218,7 @@ export default function App() {
         </Stack>
       </AppShell.Navbar>
 
-      {navbarOpened && <Box component="button" type="button" className="mobile-nav-overlay" aria-label="Close full navigation" onClick={navbar.close} hiddenFrom="sm" />}
+      {navbarOpened && <Box component="button" type="button" className="mobile-nav-overlay" aria-label="Close full navigation" onClick={toggleNavigation} hiddenFrom="sm" />}
 
       <AppShell.Main className="app-main">
         <Box maw={1500} mx="auto">
@@ -152,7 +232,7 @@ export default function App() {
 
       <Box component="nav" className="mobile-nav" aria-label="Primary navigation" hiddenFrom="sm">
         {primaryNavigation.map((item) => <button type="button" key={item.key} className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} onClick={() => navigate(item.key)}><item.icon size={21} aria-hidden="true" /><span>{item.label.split(' ')[0]}</span></button>)}
-        <button type="button" className={isMoreActive ? 'active' : ''} aria-expanded={navbarOpened} aria-controls="full-navigation" onClick={navbar.toggle}><IconMenu2 size={21} aria-hidden="true" /><span>More</span></button>
+        <button type="button" className={isMoreActive ? 'active' : ''} aria-expanded={navbarOpened} aria-controls="full-navigation" onClick={toggleNavigation}><IconMenu2 size={21} aria-hidden="true" /><span>More</span></button>
       </Box>
     </AppShell>
   )
@@ -188,4 +268,22 @@ function renderPage(page: PageKey, props: PageProps) {
 
 function ConfigurationRequired() {
   return <Center h="100vh" p="xl"><Paper p={36} radius="xl" withBorder maw={620}><ThemeIcon size={56} radius="lg" color="orange"><IconBallBasketball size={31} /></ThemeIcon><Title order={2} mt="xl">Connect Supabase to continue</Title><Text c="dimmed" mt="sm">Create <Text span ff="monospace">titan-storm-web/.env.local</Text> and add your project URL and publishable key.</Text><Alert mt="xl" icon={<IconAlertCircle size={18} />} color="orange"><Text ff="monospace" size="sm">VITE_SUPABASE_URL=https://your-project.supabase.co<br />VITE_SUPABASE_ANON_KEY=your-publishable-key</Text></Alert></Paper></Center>
+}
+
+function pageFromHistory(): PageKey {
+  const value = new URLSearchParams(window.location.search).get('page')
+  return navigation.some((item) => item.key === value) ? value as PageKey : 'dashboard'
+}
+
+function currentUrl() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
+function pageUrl(page: PageKey) {
+  const url = new URL(window.location.href)
+  if (page === 'dashboard') url.searchParams.delete('page')
+  else url.searchParams.set('page', page)
+  url.searchParams.delete('attendanceClass')
+  url.searchParams.delete('attendanceMode')
+  return `${url.pathname}${url.search}${url.hash}`
 }

@@ -18,6 +18,10 @@ src/assets/vite.svg
 public/favicon.svg
 public/icons.svg
 mobile-check.png
+playwright-report/
+test-results/
+supabase/.branches/
+supabase/.temp/
 .migration-backups/
 __pycache__/
 *.pyc

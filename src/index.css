@@ -3,6 +3,8 @@
 }
 
 :root {
+  --viewport-width: 100vw;
+  --viewport-height: 100dvh;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -13,8 +15,11 @@
 html,
 body,
 #root {
+  width: var(--viewport-width);
+  max-width: var(--viewport-width);
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -250,12 +255,14 @@ select {
 
 .student-directory-card {
   display: flex;
+  width: 100%;
   min-width: 0;
   min-height: 168px;
   align-items: center;
   flex-direction: column;
   justify-content: center;
   color: inherit;
+  font: inherit;
   text-align: center;
   cursor: pointer;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.3s ease;
@@ -402,7 +409,9 @@ select {
 }
 
 .login-kiosk-shell {
-  width: min(100%, 390px);
+  width: calc(var(--viewport-width) - 32px);
+  max-width: 390px;
+  min-width: 0;
 }
 
 .login-kiosk-brand {
@@ -968,7 +977,7 @@ select {
   .login-layout {
     display: flex;
     width: 100%;
-    max-width: 100vw;
+    max-width: var(--viewport-width);
     min-height: 100dvh;
     align-items: center;
     margin: 0;
@@ -981,7 +990,7 @@ select {
   }
 
   .login-card {
-    width: calc(100vw - 32px);
+    width: calc(var(--viewport-width) - 32px);
     min-width: 0;
     padding: 24px !important;
   }
@@ -1008,7 +1017,7 @@ select {
   }
 
   .branch-select {
-    width: min(148px, calc(100vw - 116px)) !important;
+    width: min(148px, calc(var(--viewport-width) - 116px)) !important;
     min-width: 0;
   }
 

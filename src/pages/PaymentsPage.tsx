@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSelect, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Table, Text, TextInput, Textarea } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconAlertCircle, IconCash, IconCheck, IconEdit, IconEye, IconHistory, IconPlus, IconReceipt, IconRobot, IconTrash } from '@tabler/icons-react'
-import { recordStudentPayment, scanReceipt, uploadImage } from '../lib/api'
+import { recordStudentPayment, removeReceiptIfUnreferenced, removeUploadedImage, scanReceipt, uploadImage } from '../lib/api'
 import { deletePayment, findDuplicateReference, openReceipt, updatePayment } from '../lib/paymentOperations'
 import { PageHeader, PersonAvatar, StatCard } from '../components/ui'
 import { publicImageUrl } from '../lib/supabase'
+import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { BootstrapData, Payment, PaymentMethod, PaymentStatus, Student } from '../types/models'
 
 const methods: PaymentMethod[] = ['Cash', 'Bank Transfer', "Touch 'n Go eWallet", 'Online', 'Others']
@@ -34,11 +35,17 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   const [periodMode, setPeriodMode] = useState<'month' | 'year'>('month')
   const [period, setPeriod] = useState(dayjs().format('YYYY-MM'))
   const [year, setYear] = useState(dayjs().format('YYYY'))
+  const [formBaseline, setFormBaseline] = useState('')
+  const ocrRequest = useRef(0)
+  const submitLock = useRef(false)
+  const formSnapshot = paymentSnapshot({ paymentId, studentId, feeMonths, amount, method, status, dateReceived, referenceNo, coachId, remarks, receiptPath })
+  const dirty = formOpened && (Boolean(receipt) || formSnapshot !== formBaseline)
+  const { confirmDiscard } = useNavigationGuard('payment-editor', { dirty, pending: saving })
 
   const periodPayments = data.payments.filter((payment) => periodMode === 'month' ? payment.fee_month.startsWith(period) : payment.fee_month.startsWith(year))
   const collected = periodPayments.filter((payment) => payment.status !== 'Unpaid').reduce((sum, payment) => sum + Number(payment.amount), 0)
   const paidIds = new Set(periodPayments.filter((payment) => payment.status === 'Paid').map((payment) => payment.student_id))
-  const enrolledIds = new Set(data.enrollments.map((item) => item.student_id))
+  const enrolledIds = new Set(data.enrollments.filter((item) => !item.end_date).map((item) => item.student_id))
   const activeEnrolled = data.students.filter((student) => student.status === 'Active' && enrolledIds.has(student.id))
   const arrears = useMemo(() => calculateArrears(data), [data])
   const outstandingStudents = activeEnrolled.filter((student) => (arrears.get(student.id)?.months.length || 0) > 0)
@@ -48,17 +55,14 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   const history = selectedStudent ? data.payments.filter((payment) => payment.student_id === selectedStudent.id).sort((a, b) => b.fee_month.localeCompare(a.fee_month) || b.id - a.id) : []
 
   function defaultCoach(nextStudentId: number) {
-    const enrollment = data.enrollments.find((item) => item.student_id === nextStudentId)
+    const enrollment = data.enrollments.find((item) => item.student_id === nextStudentId && !item.end_date)
     return data.classes.find((item) => item.id === enrollment?.class_id)?.coach_id || null
   }
 
   function resetForm(nextStudent?: Student) {
-    setPaymentId(null)
-    setStudentId(nextStudent ? String(nextStudent.id) : null)
-    setFeeMonths([dayjs().format('YYYY-MM')])
-    setAmount(nextStudent?.monthly_fee || '')
-    setCoachId(nextStudent ? String(defaultCoach(nextStudent.id) || '') || null : null)
-    setMethod('Bank Transfer'); setStatus('Paid'); setDateReceived(dayjs().format('YYYY-MM-DD')); setReferenceNo(''); setRemarks(''); setReceipt(null); setReceiptPath(null); setOcrMessage('')
+    const next = { paymentId: null, studentId: nextStudent ? String(nextStudent.id) : null, feeMonths: [dayjs().format('YYYY-MM')], amount: nextStudent?.monthly_fee ?? '', method: 'Bank Transfer' as PaymentMethod, status: 'Paid' as PaymentStatus, dateReceived: dayjs().format('YYYY-MM-DD'), referenceNo: '', coachId: nextStudent ? String(defaultCoach(nextStudent.id) || '') || null : null, remarks: '', receiptPath: null }
+    setPaymentId(next.paymentId); setStudentId(next.studentId); setFeeMonths(next.feeMonths); setAmount(next.amount); setCoachId(next.coachId); setMethod(next.method); setStatus(next.status); setDateReceived(next.dateReceived); setReferenceNo(next.referenceNo); setRemarks(next.remarks); setReceipt(null); setReceiptPath(next.receiptPath); setOcrMessage('')
+    setFormBaseline(paymentSnapshot(next))
   }
 
   function openNew(student?: Student) {
@@ -67,8 +71,15 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   }
 
   function editPayment(payment: Payment) {
-    setPaymentId(payment.id); setStudentId(String(payment.student_id)); setFeeMonths([payment.fee_month.slice(0, 7)]); setAmount(Number(payment.amount)); setMethod(payment.method || 'Others'); setStatus(payment.status); setDateReceived(payment.date_received || dayjs().format('YYYY-MM-DD')); setReferenceNo(payment.reference_no || ''); setCoachId(payment.coach_id ? String(payment.coach_id) : null); setRemarks(payment.remarks || ''); setReceipt(null); setReceiptPath(payment.receipt_path); setOcrMessage('')
+    const next = { paymentId: payment.id, studentId: String(payment.student_id), feeMonths: [payment.fee_month.slice(0, 7)], amount: Number(payment.amount), method: payment.method || 'Others', status: payment.status, dateReceived: payment.date_received || dayjs().format('YYYY-MM-DD'), referenceNo: payment.reference_no || '', coachId: payment.coach_id ? String(payment.coach_id) : null, remarks: payment.remarks || '', receiptPath: payment.receipt_path }
+    setPaymentId(next.paymentId); setStudentId(next.studentId); setFeeMonths(next.feeMonths); setAmount(next.amount); setMethod(next.method); setStatus(next.status); setDateReceived(next.dateReceived); setReferenceNo(next.referenceNo); setCoachId(next.coachId); setRemarks(next.remarks); setReceipt(null); setReceiptPath(next.receiptPath); setOcrMessage(''); setFormBaseline(paymentSnapshot(next))
     formModal.open()
+  }
+
+  function closeForm() {
+    if (!confirmDiscard({ dirty, pending: saving })) return
+    ocrRequest.current += 1
+    formModal.close()
   }
 
   function showHistory(student: Student) {
@@ -77,41 +88,54 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   }
 
   async function handleReceipt(file: File | null) {
+    const requestId = ++ocrRequest.current
     setReceipt(file); setOcrMessage('')
     if (!file) return
     setSaving(true)
     try {
       const result = await scanReceipt(file)
+      if (requestId !== ocrRequest.current) return
       if (result.amount != null) setAmount(result.amount)
       if (result.date && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) setDateReceived(result.date)
       if (result.method) setMethod(result.method)
       if (result.reference) setReferenceNo(result.reference)
       setOcrMessage(result.confidence != null ? `Receipt read with ${Math.round(result.confidence * 100)}% confidence. Verify every field before saving.` : 'Receipt read. Verify every field before saving.')
     } catch (error) {
-      setOcrMessage(`OCR unavailable: ${errorMessage(error)}. Enter the details manually.`)
+      if (requestId === ocrRequest.current) setOcrMessage(`OCR unavailable: ${errorMessage(error)}. Enter the details manually.`)
     } finally {
-      setSaving(false)
+      if (requestId === ocrRequest.current) setSaving(false)
     }
   }
 
   async function submit() {
-    if (!studentId || !feeMonths.length || amount === '' || !method || !status || !dateReceived) return
+    if (!studentId || !feeMonths.length || amount === '' || !method || !status || !dateReceived || submitLock.current) return
+    submitLock.current = true
+    let uploadedReceiptPath: string | null = null
+    let committed = false
+    const oldReceiptPath = paymentId ? data.payments.find((payment) => payment.id === paymentId)?.receipt_path || null : null
     setSaving(true)
     try {
       const duplicate = await findDuplicateReference(branchId, referenceNo, paymentId || undefined)
       if (duplicate && !window.confirm(`Reference already exists for ${duplicate.student?.name || 'another student'} (${dayjs(duplicate.fee_month).format('MMM YYYY')}). Save anyway?`)) return
       const nextReceiptPath = receipt ? await uploadImage('payment-receipts', branchId, receipt, Number(studentId)) : receiptPath
+      if (receipt) uploadedReceiptPath = nextReceiptPath
       if (paymentId) {
-        await updatePayment(paymentId, { student_id: Number(studentId), fee_month: feeMonths[0], amount: Number(amount), method, status, date_received: dateReceived, remarks, reference_no: referenceNo, coach_id: coachId ? Number(coachId) : null, receipt_path: nextReceiptPath })
+        await updatePayment(branchId, paymentId, { student_id: Number(studentId), fee_month: feeMonths[0], amount: Number(amount), method, status, date_received: dateReceived, remarks, reference_no: referenceNo, coach_id: coachId ? Number(coachId) : null, receipt_path: nextReceiptPath })
       } else {
         await recordStudentPayment({ studentId: Number(studentId), feeMonths, amount: Number(amount), method, status, dateReceived, remarks, referenceNo, coachId: coachId ? Number(coachId) : null, receiptPath: nextReceiptPath })
       }
+      committed = true
+      if (oldReceiptPath && oldReceiptPath !== nextReceiptPath) await removeReceiptIfUnreferenced(oldReceiptPath).catch(() => undefined)
       notifications.show({ color: 'green', title: paymentId ? 'Payment updated' : 'Payment recorded', message: paymentId ? 'The payment correction was saved.' : `${feeMonths.length} fee month${feeMonths.length > 1 ? 's' : ''} updated.` })
+      setFormBaseline(paymentSnapshot({ paymentId, studentId, feeMonths, amount, method, status, dateReceived, referenceNo, coachId, remarks, receiptPath: nextReceiptPath }))
+      setReceipt(null)
       formModal.close()
-      await onChanged()
+      try { await onChanged() } catch (error) { notifications.show({ color: 'orange', title: 'Payment saved, refresh failed', message: errorMessage(error) }) }
     } catch (error) {
+      if (!committed && uploadedReceiptPath) await removeUploadedImage('payment-receipts', uploadedReceiptPath).catch(() => undefined)
       notifications.show({ color: 'red', title: 'Could not save payment', message: errorMessage(error) })
     } finally {
+      submitLock.current = false
       setSaving(false)
     }
   }
@@ -119,7 +143,8 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
   async function remove(payment: Payment) {
     if (!window.confirm(`Delete the ${dayjs(payment.fee_month).format('MMMM YYYY')} payment?`)) return
     try {
-      await deletePayment(payment)
+      await deletePayment(branchId, payment)
+      if (payment.receipt_path) await removeReceiptIfUnreferenced(payment.receipt_path).catch(() => undefined)
       notifications.show({ color: 'green', message: 'Payment deleted' })
       await onChanged()
     } catch (error) {
@@ -149,7 +174,7 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
         <Stack>{history.length ? history.map((payment) => <Paper key={payment.id} p="md" radius="md" withBorder><Group justify="space-between" align="flex-start"><Box><Group gap="xs"><Text fw={800}>{dayjs(payment.fee_month).format('MMMM YYYY')}</Text><StatusBadge status={payment.status} />{payment.commission_settled && <Badge color="violet" variant="light">Commission settled</Badge>}</Group><Text size="sm" c="dimmed" mt={4}>{payment.method || 'No method'} · {payment.date_received ? dayjs(payment.date_received).format('D MMM YYYY') : 'No received date'}</Text></Box><Text fw={850}>RM {money(payment.amount)}</Text></Group><Text size="sm" mt="sm">Reference: {payment.reference_no || '—'}</Text>{payment.remarks && <Text size="sm" c="dimmed">{payment.remarks}</Text>}<Group mt="md"><Button variant="light" leftSection={<IconEdit size={16} />} onClick={() => editPayment(payment)}>Edit</Button>{payment.receipt_path && <Button variant="light" color="blue" leftSection={<IconEye size={16} />} onClick={() => openReceipt(payment.receipt_path!)}>Receipt</Button>}<Button variant="light" color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(payment)}>Delete</Button></Group></Paper>) : <Text c="dimmed" ta="center" py="xl">No payments recorded.</Text>}<Button leftSection={<IconPlus size={16} />} onClick={() => selectedStudent && openNew(selectedStudent)}>Add payment</Button></Stack>
       </Modal>
 
-      <Modal opened={formOpened} onClose={formModal.close} title={paymentId ? 'Edit payment' : 'Record student payment'} size="lg" centered>
+      <Modal opened={formOpened} onClose={closeForm} title={paymentId ? 'Edit payment' : 'Record student payment'} size="lg" centered>
         <Stack>
           <Select label="Student" searchable required value={studentId} onChange={(value) => { setStudentId(value); const student = data.students.find((item) => String(item.id) === value); setAmount(student?.monthly_fee || ''); setCoachId(student ? String(defaultCoach(student.id) || '') || null : null) }} data={activeEnrolled.map((student) => ({ value: String(student.id), label: student.name }))} />
           {paymentId ? <Select label="Fee month" value={feeMonths[0]} onChange={(value) => setFeeMonths(value ? [value] : [])} data={months} /> : <MultiSelect label="Fee month(s)" required value={feeMonths} onChange={setFeeMonths} data={months} searchable />}
@@ -162,7 +187,7 @@ export function PaymentsPage({ branchId, data, onChanged }: { branchId: number; 
           {ocrMessage && <Alert icon={<IconRobot size={17} />} color={ocrMessage.startsWith('OCR unavailable') ? 'orange' : 'blue'}>{ocrMessage}</Alert>}
           {!paymentId && feeMonths.length > 1 && <Alert color="blue">The latest month stores the full amount and reference. Earlier months remain separate Paid commission units.</Alert>}
           {paymentId && data.payments.find((payment) => payment.id === paymentId)?.commission_settled && <Alert color="violet">This payment is linked to a settled coach payout. Editing it does not recalculate historical payout lines.</Alert>}
-          <Group className="modal-actions" justify="flex-end"><Button variant="default" onClick={formModal.close}>Cancel</Button><Button onClick={submit} loading={saving} disabled={!studentId || !feeMonths.length || amount === ''}>Save payment</Button></Group>
+          <Group className="modal-actions" justify="flex-end"><Button variant="default" disabled={saving} onClick={closeForm}>Cancel</Button><Button onClick={submit} loading={saving} disabled={!studentId || !feeMonths.length || amount === ''}>Save payment</Button></Group>
         </Stack>
       </Modal>
     </>
@@ -186,12 +211,21 @@ function calculateArrears(data: BootstrapData) {
   const result = new Map<number, { months: string[]; amount: number }>()
   const current = dayjs().startOf('month')
   data.students.forEach((student) => {
-    const starts = data.enrollments.filter((item) => item.student_id === student.id).map((item) => dayjs(item.start_date).startOf('month')).filter((date) => date.isValid())
-    if (!starts.length) return
-    let cursor = starts.sort((a, b) => a.valueOf() - b.valueOf())[0]
+    const periods = data.enrollments.filter((item) => item.student_id === student.id)
+    if (!periods.length) return
+    const due = new Set<string>()
+    periods.forEach((period) => {
+      let cursor = dayjs(period.start_date).startOf('month')
+      const end = period.end_date ? dayjs(period.end_date).startOf('month') : current
+      if (!cursor.isValid() || !end.isValid()) return
+      const boundedEnd = end.isAfter(current) ? current : end
+      while (cursor.isBefore(boundedEnd) || cursor.isSame(boundedEnd, 'month')) {
+        due.add(cursor.format('YYYY-MM'))
+        cursor = cursor.add(1, 'month')
+      }
+    })
     const paid = new Set(data.payments.filter((payment) => payment.student_id === student.id && payment.status === 'Paid').map((payment) => payment.fee_month.slice(0, 7)))
-    const unpaid: string[] = []
-    while (cursor.isBefore(current) || cursor.isSame(current, 'month')) { const value = cursor.format('YYYY-MM'); if (!paid.has(value)) unpaid.push(value); cursor = cursor.add(1, 'month') }
+    const unpaid = [...due].filter((month) => !paid.has(month)).sort()
     result.set(student.id, { months: unpaid, amount: unpaid.length * Number(student.monthly_fee || 0) })
   })
   return result
@@ -203,4 +237,20 @@ function money(value: number) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong'
+}
+
+function paymentSnapshot(value: {
+  paymentId: number | null
+  studentId: string | null
+  feeMonths: string[]
+  amount: number | string
+  method: PaymentMethod | null
+  status: PaymentStatus | null
+  dateReceived: string
+  referenceNo: string
+  coachId: string | null
+  remarks: string
+  receiptPath: string | null
+}) {
+  return JSON.stringify(value)
 }

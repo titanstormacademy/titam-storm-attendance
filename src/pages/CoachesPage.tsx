@@ -4,9 +4,10 @@ import { ActionIcon, Alert, Badge, Box, Button, Checkbox, FileButton, Grid, Grou
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconAlertTriangle, IconCamera, IconCash, IconClock, IconEdit, IconMessageCircle, IconPlus, IconReceiptRefund, IconTrash, IconUserStar } from '@tabler/icons-react'
-import { deleteCoach, getCoachPayments, getCommission, recordCoachPayout, saveCoach, undoCoachPayout, uploadImage } from '../lib/api'
+import { deleteCoach, getCoachPayments, getCommission, recordCoachPayout, removeUploadedImage, saveCoach, undoCoachPayout, uploadImage } from '../lib/api'
 import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
 import { publicImageUrl } from '../lib/supabase'
+import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { BootstrapData, Coach, CoachPayment, CommissionSummary } from '../types/models'
 
 const blankCoach: Partial<Coach> & { name: string } = { name: '', phone: '', coach_type: 'Head', hourly_rate: 0, status: 'Active', photo_path: null }
@@ -26,38 +27,71 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
   const [payoutRemarks, setPayoutRemarks] = useState('')
   const [zeroAmountReviewed, setZeroAmountReviewed] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [formBaseline, setFormBaseline] = useState('')
+  const [payoutBaseline, setPayoutBaseline] = useState('')
   const payoutRequest = useRef(0)
+  const submitLock = useRef(false)
+  const payoutLock = useRef(false)
+  const formDirty = formOpened && (Boolean(photo) || JSON.stringify(form) !== formBaseline)
+  const payoutDirty = payoutOpened && commission != null && JSON.stringify([payoutAmount, payoutDate, payoutRemarks, month]) !== payoutBaseline
+  const { confirmDiscard } = useNavigationGuard('coach-editors', { dirty: formDirty || payoutDirty, pending: loading })
 
   function edit(item?: Coach) {
-    setForm(item ? { ...item } : { ...blankCoach })
+    const next = item ? { ...item } : { ...blankCoach }
+    setForm(next)
+    setFormBaseline(JSON.stringify(next))
     setPhoto(null)
     formModal.open()
   }
 
   async function save() {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || submitLock.current) return
+    submitLock.current = true
     setLoading(true)
     try {
       let saved = await saveCoach(branchId, form)
       setForm((current) => ({ ...current, id: saved.id }))
+      let photoError: unknown = null
       if (photo) {
-        const path = await uploadImage('coach-photos', branchId, photo, saved.id)
-        saved = await saveCoach(branchId, { id: saved.id, name: saved.name, photo_path: path })
+        const oldPhotoPath = saved.photo_path
+        let path: string | null = null
+        try {
+          path = await uploadImage('coach-photos', branchId, photo, saved.id)
+          saved = await saveCoach(branchId, { id: saved.id, name: saved.name, photo_path: path })
+          if (oldPhotoPath && oldPhotoPath !== path) await removeUploadedImage('coach-photos', oldPhotoPath).catch(() => undefined)
+        } catch (error) {
+          if (path) await removeUploadedImage('coach-photos', path).catch(() => undefined)
+          photoError = error
+        }
       }
-      notifications.show({ color: 'green', message: 'Coach saved' })
+      notifications.show(photoError ? { color: 'orange', title: 'Coach saved without photo', message: errorMessage(photoError) } : { color: 'green', message: 'Coach saved' })
+      setPhoto(null)
+      setFormBaseline(JSON.stringify(saved))
       formModal.close()
-      await onChanged()
+      try { await onChanged() } catch (error) { notifications.show({ color: 'orange', title: 'Coach saved, refresh failed', message: errorMessage(error) }) }
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
+      submitLock.current = false
       setLoading(false)
     }
+  }
+
+  function closeForm() {
+    if (confirmDiscard({ dirty: formDirty, pending: loading })) formModal.close()
+  }
+
+  function closePayout() {
+    if (!confirmDiscard({ dirty: payoutDirty, pending: loading })) return
+    payoutRequest.current += 1
+    payoutModal.close()
   }
 
   async function remove(item: Coach) {
     if (!window.confirm(`Delete ${item.name}? Deactivate the coach instead if they have historical records.`)) return
     try {
-      await deleteCoach(item.id)
+      await deleteCoach(branchId, item.id)
+      if (item.photo_path) await removeUploadedImage('coach-photos', item.photo_path).catch(() => undefined)
       await onChanged()
     } catch (error) {
       notifications.show({ color: 'red', title: 'Coach cannot be deleted', message: `${errorMessage(error)} Deactivate the coach to preserve linked records.` })
@@ -75,13 +109,17 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
     setLoading(true)
     payoutModal.open()
     try {
-      const [nextCommission, nextHistory] = await Promise.all([getCommission(item, branchId, selectedMonth), getCoachPayments(item.id)])
+      const [nextCommission, nextHistory] = await Promise.all([getCommission(item, branchId, selectedMonth), getCoachPayments(branchId, item.id)])
       if (requestId !== payoutRequest.current) return
       setCommission(nextCommission)
       setHistory(nextHistory)
       const amount = item.coach_type === 'Head' ? nextCommission.commission || 0 : nextCommission.total || 0
+      const date = dayjs().format('YYYY-MM-DD')
+      const remarks = item.coach_type === 'Assistant' ? `${dayjs(`${selectedMonth}-01`).format('MMMM YYYY')} · ${nextCommission.hours || 0}h` : ''
       setPayoutAmount(amount)
-      setPayoutRemarks(item.coach_type === 'Assistant' ? `${dayjs(`${selectedMonth}-01`).format('MMMM YYYY')} · ${nextCommission.hours || 0}h` : '')
+      setPayoutDate(date)
+      setPayoutRemarks(remarks)
+      setPayoutBaseline(JSON.stringify([amount, date, remarks, selectedMonth]))
     } catch (error) {
       if (requestId === payoutRequest.current) notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
@@ -96,9 +134,12 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
   }
 
   async function submitPayout() {
-    if (!coach || !commission || payoutAmount === '' || !payoutDate) return
+    if (!coach || !commission || payoutAmount === '' || !payoutDate || payoutLock.current) return
+    const selectedCoach = coach
+    const selectedMonth = month
     const eligibleUnits = coach.coach_type === 'Head' ? commission.units || 0 : commission.hours || 0
     if (Number(payoutAmount) === 0 && (!eligibleUnits || !zeroAmountReviewed)) return
+    payoutLock.current = true
     setLoading(true)
     try {
       await recordCoachPayout({
@@ -112,22 +153,28 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
         payMonth: coach.coach_type === 'Assistant' ? month : null,
       })
       notifications.show({ color: 'green', message: 'Payout recorded and eligible commission units settled' })
-      await openPayout(coach)
+      await openPayout(selectedCoach, selectedMonth)
       await onChanged()
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
+      payoutLock.current = false
       setLoading(false)
     }
   }
 
   async function undo(payment: CoachPayment) {
-    if (!window.confirm('Undo this payout and reopen its settled student-payment units?')) return
+    if (payoutLock.current || !window.confirm('Undo this payout and reopen its settled units?')) return
+    payoutLock.current = true
+    setLoading(true)
     try {
       await undoCoachPayout(payment.id)
-      if (coach) await openPayout(coach)
+      if (coach) await openPayout(coach, month)
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
+    } finally {
+      payoutLock.current = false
+      setLoading(false)
     }
   }
 
@@ -147,7 +194,7 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
         </Paper>)}
       </SimpleGrid> : <EmptyState title="No coaches yet" message="Add head and assistant coaches, then assign them to classes." icon={IconUserStar} />}
 
-      <Modal opened={formOpened} onClose={formModal.close} title={form.id ? `Edit ${form.name}` : 'Add coach'} centered>
+      <Modal opened={formOpened} onClose={closeForm} title={form.id ? `Edit ${form.name}` : 'Add coach'} centered>
         <Stack>
           <Group justify="center"><Box className="profile-photo-editor"><PersonAvatar name={form.name || 'New coach'} src={publicImageUrl('coach-photos', form.photo_path || null)} size={92} onClick={() => setPhotoView({ src: publicImageUrl('coach-photos', form.photo_path || null), name: form.name || 'Coach photo' })} /><FileButton onChange={setPhoto} accept="image/png,image/jpeg,image/webp">{(props) => <ActionIcon {...props} className="profile-camera-button" aria-label="Choose coach photo" color="orange" size={32} radius="xl"><IconCamera size={16} /></ActionIcon>}</FileButton></Box></Group>
           {photo && <Text size="xs" c="orange" ta="center">New photo selected · save to upload</Text>}
@@ -155,13 +202,13 @@ export function CoachesPage({ branchId, data, onChanged }: { branchId: number; d
           <TextInput label="Phone" value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.currentTarget.value })} />
           <Grid><Grid.Col span={{ base: 12, xs: 6 }}><Select label="Type" value={form.coach_type} onChange={(value) => setForm({ ...form, coach_type: value as Coach['coach_type'] })} data={[{ value: 'Head', label: 'Head coach' }, { value: 'Assistant', label: 'Assistant coach' }]} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6 }}><Select label="Status" value={form.status} onChange={(value) => setForm({ ...form, status: value as Coach['status'] })} data={['Active', 'Inactive']} /></Grid.Col></Grid>
           {form.coach_type === 'Assistant' && <NumberInput label="Hourly rate (RM)" value={form.hourly_rate || 0} onChange={(value) => setForm({ ...form, hourly_rate: Number(value) })} min={0} decimalScale={2} />}
-          <Group justify="flex-end"><Button variant="default" onClick={formModal.close}>Cancel</Button><Button onClick={save} loading={loading}>Save coach</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={loading} onClick={closeForm}>Cancel</Button><Button onClick={save} loading={loading}>Save coach</Button></Group>
         </Stack>
       </Modal>
 
-      <Modal opened={payoutOpened} onClose={payoutModal.close} title={`${coach?.name || ''} payout`} size="xl" centered>
+      <Modal opened={payoutOpened} onClose={closePayout} title={`${coach?.name || ''} payout`} size="xl" centered>
         <Stack>
-          {coach?.coach_type === 'Assistant' && <Select label="Pay month" value={month} onChange={changeMonth} data={Array.from({ length: 18 }, (_, index) => dayjs().subtract(index, 'month')).map((date) => ({ value: date.format('YYYY-MM'), label: date.format('MMMM YYYY') }))} w={{ base: '100%', sm: 220 }} allowDeselect={false} />}
+          {coach?.coach_type === 'Assistant' && <Select label="Pay month" value={month} onChange={changeMonth} disabled={loading} data={Array.from({ length: 18 }, (_, index) => dayjs().subtract(index, 'month')).map((date) => ({ value: date.format('YYYY-MM'), label: date.format('MMMM YYYY') }))} w={{ base: '100%', sm: 220 }} allowDeselect={false} />}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <Summary label={coach?.coach_type === 'Head' ? 'Unsettled units' : 'Hours worked'} value={String(coach?.coach_type === 'Head' ? commission?.units || 0 : commission?.hours || 0)} icon={coach?.coach_type === 'Head' ? <IconReceiptRefund size={20} /> : <IconClock size={20} />} />
             <Summary label={coach?.coach_type === 'Head' ? 'Distinct students' : 'Hourly rate'} value={coach?.coach_type === 'Head' ? String(commission?.students || 0) : `RM ${money(commission?.hourlyRate || 0)}`} icon={<IconUserStar size={20} />} />

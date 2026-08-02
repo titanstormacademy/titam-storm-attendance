@@ -83,33 +83,37 @@ export async function getBootstrapData(branchId: number, includePayments: boolea
 
 export async function saveStudent(branchId: number, values: Partial<Student> & { name: string }) {
   const payload = { ...values, branch_id: branchId }
-  if (values.id) return unwrap(await supabase.from('students').update(payload).eq('id', values.id).select().single()) as Student
+  if (values.id) return unwrap(await supabase.from('students').update(payload).eq('id', values.id).eq('branch_id', branchId).select().single()) as Student
   return unwrap(await supabase.from('students').insert(payload).select().single()) as Student
 }
 
-export async function deleteStudent(id: number) {
-  unwrap(await supabase.from('students').delete().eq('id', id))
+export async function saveStudentWithEnrollments(branchId: number, student: Partial<Student> & { name: string }, enrollments: Array<{ class_id: number; start_date: string }>, withdrawals: Array<{ class_id: number; end_date: string }>) {
+  return unwrap(await supabase.rpc('save_student_with_enrollments', { p_branch_id: branchId, p_student: student, p_enrollments: enrollments, p_withdrawals: withdrawals })) as Student
+}
+
+export async function deleteStudent(branchId: number, id: number) {
+  unwrap(await supabase.from('students').delete().eq('id', id).eq('branch_id', branchId))
 }
 
 export async function saveCoach(branchId: number, values: Partial<Coach> & { name: string }) {
   const payload = { ...values, branch_id: branchId }
-  if (values.id) return unwrap(await supabase.from('coaches').update(payload).eq('id', values.id).select().single()) as Coach
+  if (values.id) return unwrap(await supabase.from('coaches').update(payload).eq('id', values.id).eq('branch_id', branchId).select().single()) as Coach
   return unwrap(await supabase.from('coaches').insert(payload).select().single()) as Coach
 }
 
 export async function saveClass(branchId: number, values: Partial<AcademyClass> & { label: string; day_of_week: string }) {
   const { coach: _coach, ...fields } = values
   const payload = { ...fields, branch_id: branchId }
-  if (values.id) return unwrap(await supabase.from('classes').update(payload).eq('id', values.id).select().single()) as AcademyClass
+  if (values.id) return unwrap(await supabase.from('classes').update(payload).eq('id', values.id).eq('branch_id', branchId).select().single()) as AcademyClass
   return unwrap(await supabase.from('classes').insert(payload).select().single()) as AcademyClass
 }
 
-export async function deleteClass(id: number) {
-  unwrap(await supabase.from('classes').delete().eq('id', id))
+export async function deleteClass(branchId: number, id: number) {
+  unwrap(await supabase.from('classes').delete().eq('id', id).eq('branch_id', branchId))
 }
 
-export async function deleteCoach(id: number) {
-  unwrap(await supabase.from('coaches').delete().eq('id', id))
+export async function deleteCoach(branchId: number, id: number) {
+  unwrap(await supabase.from('coaches').delete().eq('id', id).eq('branch_id', branchId))
 }
 
 export async function saveEnrollment(studentId: number, classId: number, startDate: string) {
@@ -142,7 +146,19 @@ export async function getAttendance(sessionId: number) {
 }
 
 export async function saveAttendance(record: Pick<Attendance, 'student_id' | 'session_id' | 'class_id' | 'branch_id' | 'attendance_date' | 'status' | 'remarks'>) {
-  return unwrap(await supabase.from('attendance').upsert(record).select().single()) as Attendance
+  return unwrap(await supabase.from('attendance').upsert(record, { onConflict: 'student_id,session_id' }).select().single()) as Attendance
+}
+
+export async function setAttendanceStatus(studentId: number, sessionId: number, status: Attendance['status']) {
+  return unwrap(await supabase.rpc('set_attendance_status', { p_student_id: studentId, p_session_id: sessionId, p_status: status })) as Attendance
+}
+
+export async function setAttendanceRemark(studentId: number, sessionId: number, remarks: string) {
+  return unwrap(await supabase.rpc('set_attendance_remark', { p_student_id: studentId, p_session_id: sessionId, p_remarks: remarks })) as Attendance
+}
+
+export async function markAllPresent(sessionId: number, studentIds: number[]) {
+  return unwrap(await supabase.rpc('mark_all_present', { p_session_id: sessionId, p_student_ids: studentIds })) as Attendance[]
 }
 
 export async function removeAttendance(studentId: number, sessionId: number) {
@@ -195,8 +211,8 @@ export async function getCommission(coach: Coach, branchId: number, month: strin
   return unwrap(await supabase.rpc(functionName, args)) as CommissionSummary
 }
 
-export async function getCoachPayments(coachId: number) {
-  return (unwrap(await supabase.from('coach_payments').select('*').eq('coach_id', coachId).order('date_paid', { ascending: false })) || []) as CoachPayment[]
+export async function getCoachPayments(branchId: number, coachId: number) {
+  return (unwrap(await supabase.from('coach_payments').select('*').eq('branch_id', branchId).eq('coach_id', coachId).order('date_paid', { ascending: false })) || []) as CoachPayment[]
 }
 
 export async function recordCoachPayout(input: {
@@ -254,8 +270,8 @@ export async function updateProfileAccess(userId: string, role: Profile['role'],
   unwrap(await supabase.rpc('update_profile_access', { p_user_id: userId, p_role: role, p_branch_ids: branchIds }))
 }
 
-export async function reconcileStudentEnrollments(studentId: number, enrollments: Array<{ class_id: number; start_date: string }>) {
-  unwrap(await supabase.rpc('reconcile_student_enrollments', { p_student_id: studentId, p_enrollments: enrollments }))
+export async function reconcileStudentEnrollments(studentId: number, enrollments: Array<{ class_id: number; start_date: string }>, withdrawals: Array<{ class_id: number; end_date: string }> = []) {
+  unwrap(await supabase.rpc('reconcile_student_enrollments', { p_student_id: studentId, p_enrollments: enrollments, p_withdrawals: withdrawals }))
 }
 
 export async function getAttendanceReport(branchId: number, startDate: string, endDate: string) {
@@ -283,6 +299,18 @@ export async function uploadImage(bucket: string, branchId: number, file: File, 
     }
   }
   return result.data.path
+}
+
+export async function removeUploadedImage(bucket: string, path: string) {
+  const paths = bucket === 'student-photos' || bucket === 'coach-photos' ? [path, thumbnailPath(path)] : [path]
+  const { error } = await supabase.storage.from(bucket).remove(paths)
+  if (error) throw new Error(error.message)
+}
+
+export async function removeReceiptIfUnreferenced(path: string) {
+  const { count, error } = await supabase.from('payments').select('id', { count: 'exact', head: true }).eq('receipt_path', path)
+  if (error) throw new Error(error.message)
+  if (!count) await removeUploadedImage('payment-receipts', path)
 }
 
 async function optimizeImage(file: File, maxDimension: number) {

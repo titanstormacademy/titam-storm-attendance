@@ -48,14 +48,14 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
 
   const rows = useMemo(() => {
     const byStudent = new Map<number, ReportRow>()
-    data.students.filter((student) => student.status === 'Active' && data.enrollments.some((entry) => entry.student_id === student.id && entry.start_date <= period.end)).forEach((student) => {
-      const enrolledClasses = data.enrollments.filter((entry) => entry.student_id === student.id && entry.start_date <= period.end).map((entry) => data.classes.find((item) => item.id === entry.class_id)).filter((item): item is AcademyClass => Boolean(item)).map((item) => ({ id: item.id, label: item.label }))
+    data.students.filter((student) => student.status === 'Active' && data.enrollments.some((entry) => entry.student_id === student.id && entry.start_date <= period.end && (!entry.end_date || entry.end_date >= period.start))).forEach((student) => {
+      const enrolledClasses = [...new Map(data.enrollments.filter((entry) => entry.student_id === student.id && entry.start_date <= period.end && (!entry.end_date || entry.end_date >= period.start)).map((entry) => data.classes.find((item) => item.id === entry.class_id)).filter((item): item is AcademyClass => Boolean(item)).map((item) => [item.id, { id: item.id, label: item.label }])).values()]
       byStudent.set(student.id, { id: student.id, name: student.name, level: student.level, age: student.date_of_birth ? dayjs().diff(dayjs(student.date_of_birth), 'year') : null, total: 0, enrolledClasses, classes: new Map(), dates: new Map() })
     })
     records.forEach((record) => {
       const student = data.students.find((item) => item.id === record.student_id)
       const row = byStudent.get(record.student_id) || { id: record.student_id, name: record.student.name, level: record.student.level, age: student?.date_of_birth ? dayjs().diff(dayjs(student.date_of_birth), 'year') : null, total: 0, enrolledClasses: [], classes: new Map(), dates: new Map() }
-      const walkIn = !data.enrollments.some((entry) => entry.student_id === record.student_id && entry.class_id === record.class_id && entry.start_date <= record.attendance_date)
+      const walkIn = !data.enrollments.some((entry) => entry.student_id === record.student_id && entry.class_id === record.class_id && entry.start_date <= record.attendance_date && (!entry.end_date || entry.end_date >= record.attendance_date))
       const classEntry = row.classes.get(record.class_id) || { label: record.class.label, dates: [], walkIns: 0 }
       classEntry.dates.push(record.attendance_date)
       if (walkIn) classEntry.walkIns += 1
@@ -65,7 +65,7 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
       byStudent.set(record.student_id, row)
     })
     return [...byStudent.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-  }, [data.classes, data.enrollments, data.students, period.end, records])
+  }, [data.classes, data.enrollments, data.students, period.end, period.start, records])
 
   const dates = useMemo(() => [...new Set([...data.sessions.filter((item) => item.session_date >= period.start && item.session_date <= period.end).map((item) => item.session_date), ...records.map((item) => item.attendance_date)])].sort(), [data.sessions, period.end, period.start, records])
   const classesInReport = useMemo(() => [...new Map(records.map((record) => [record.class_id, record.class.label])).entries()], [records])

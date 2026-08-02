@@ -3,8 +3,9 @@ import { ActionIcon, Badge, Box, Button, FileInput, Grid, Group, Modal, MultiSel
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconBuilding, IconDeviceFloppy, IconEdit, IconKey, IconPhoto, IconPlus, IconTrash, IconUserShield } from '@tabler/icons-react'
-import { getBranchMemberships, getHeadCoachRates, getProfiles, replaceHeadCoachRates, saveBranch, setSharedAdminPassword, updateAcademySettings, updateProfileAccess, uploadImage } from '../lib/api'
+import { getBranchMemberships, getHeadCoachRates, getProfiles, removeUploadedImage, replaceHeadCoachRates, saveBranch, setSharedAdminPassword, updateAcademySettings, updateProfileAccess, uploadImage } from '../lib/api'
 import { PageHeader } from '../components/ui'
+import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { Branch, HeadCoachRate, Profile } from '../types/models'
 
 export function SettingsPage({ branches, settings, onChanged }: {
@@ -23,16 +24,37 @@ export function SettingsPage({ branches, settings, onChanged }: {
   const [adminPassword, setAdminPassword] = useState('')
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [branchBaseline, setBranchBaseline] = useState('')
+  const [ratesBaseline, setRatesBaseline] = useState('[]')
+  const [accessBaseline, setAccessBaseline] = useState('[]')
+  const brandDirty = academyName !== settings.academy_name || defaultBranchId !== (settings.default_branch_id ? String(settings.default_branch_id) : null) || Boolean(logo)
+  const passwordDirty = Boolean(adminPassword || confirmAdminPassword)
+  const branchDirty = branchOpened && JSON.stringify(branchForm) !== branchBaseline
+  const ratesDirty = JSON.stringify(rates) !== ratesBaseline
+  const accessDirty = JSON.stringify([profiles, memberships]) !== accessBaseline
+  const dirty = brandDirty || passwordDirty || branchDirty || ratesDirty || accessDirty
+  const { confirmDiscard } = useNavigationGuard('settings-editors', { dirty, pending: saving })
 
   useEffect(() => {
+    let active = true
     Promise.all([getHeadCoachRates(), getProfiles(), getBranchMemberships()]).then(([nextRates, nextProfiles, nextMemberships]) => {
+      if (!active) return
       setRates(nextRates); setProfiles(nextProfiles); setMemberships(nextMemberships)
-    }).catch((error) => notifications.show({ color: 'red', message: errorMessage(error) }))
+      setRatesBaseline(JSON.stringify(nextRates))
+      setAccessBaseline(JSON.stringify([nextProfiles, nextMemberships]))
+    }).catch((error) => { if (active) notifications.show({ color: 'red', message: errorMessage(error) }) })
+    return () => { active = false }
   }, [])
 
   function editBranch(branch?: Branch) {
-    setBranchForm(branch ? { ...branch } : { name: '', subtitle: '', status: 'Active' })
+    const next = branch ? { ...branch } : { name: '', subtitle: '', status: 'Active' as const }
+    setBranchForm(next)
+    setBranchBaseline(JSON.stringify(next))
     branchModal.open()
+  }
+
+  function closeBranch() {
+    if (confirmDiscard({ dirty: branchDirty, pending: saving })) branchModal.close()
   }
 
   async function submitBranch() {
@@ -70,9 +92,16 @@ export function SettingsPage({ branches, settings, onChanged }: {
     setSaving(true)
     try {
       const logoPath = logo ? await uploadImage('academy-assets', settings.default_branch_id || branches[0]?.id || 1, logo) : settings.logo_path
-      await updateAcademySettings({ academy_name: academyName, logo_path: logoPath || undefined, default_branch_id: defaultBranchId ? Number(defaultBranchId) : undefined })
+      try {
+        await updateAcademySettings({ academy_name: academyName, logo_path: logoPath || undefined, default_branch_id: defaultBranchId ? Number(defaultBranchId) : undefined })
+      } catch (error) {
+        if (logo && logoPath) await removeUploadedImage('academy-assets', logoPath).catch(() => undefined)
+        throw error
+      }
+      if (logo && settings.logo_path && settings.logo_path !== logoPath) await removeUploadedImage('academy-assets', settings.logo_path).catch(() => undefined)
+      setLogo(null)
       notifications.show({ color: 'green', message: 'Academy branding updated' })
-      await onChanged()
+      try { await onChanged() } catch (error) { notifications.show({ color: 'orange', title: 'Branding saved, refresh failed', message: errorMessage(error) }) }
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
     } finally {
@@ -84,7 +113,9 @@ export function SettingsPage({ branches, settings, onChanged }: {
     setSaving(true)
     try {
       await replaceHeadCoachRates(rates.map(({ id: _id, ...rate }) => rate))
-      setRates(await getHeadCoachRates())
+      const nextRates = await getHeadCoachRates()
+      setRates(nextRates)
+      setRatesBaseline(JSON.stringify(nextRates))
       notifications.show({ color: 'green', message: 'Head coach rates updated' })
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
@@ -97,6 +128,7 @@ export function SettingsPage({ branches, settings, onChanged }: {
     setSaving(true)
     try {
       await updateProfileAccess(profile.id, profile.role, memberships.filter((item) => item.user_id === profile.id).map((item) => item.branch_id))
+      setAccessBaseline((current) => updateAccessBaseline(current, profile, memberships))
       notifications.show({ color: 'green', message: `${profile.full_name}'s access updated` })
     } catch (error) {
       notifications.show({ color: 'red', message: errorMessage(error) })
@@ -148,8 +180,8 @@ export function SettingsPage({ branches, settings, onChanged }: {
         </Grid.Col>
       </Grid>
 
-      <Modal opened={branchOpened} onClose={branchModal.close} title={branchForm.id ? 'Edit branch' : 'Add branch'} centered>
-        <Stack><TextInput label="Branch name" value={branchForm.name} onChange={(event) => setBranchForm({ ...branchForm, name: event.currentTarget.value })} required /><TextInput label="Subtitle / location" value={branchForm.subtitle || ''} onChange={(event) => setBranchForm({ ...branchForm, subtitle: event.currentTarget.value })} /><Select label="Status" value={branchForm.status} onChange={(value) => setBranchForm({ ...branchForm, status: value as Branch['status'] })} data={['Active', 'Inactive']} /><Group justify="flex-end"><Button variant="default" onClick={branchModal.close}>Cancel</Button><Button onClick={submitBranch} loading={saving}>Save branch</Button></Group></Stack>
+      <Modal opened={branchOpened} onClose={closeBranch} title={branchForm.id ? 'Edit branch' : 'Add branch'} centered>
+        <Stack><TextInput label="Branch name" value={branchForm.name} onChange={(event) => setBranchForm({ ...branchForm, name: event.currentTarget.value })} required /><TextInput label="Subtitle / location" value={branchForm.subtitle || ''} onChange={(event) => setBranchForm({ ...branchForm, subtitle: event.currentTarget.value })} /><Select label="Status" value={branchForm.status} onChange={(value) => setBranchForm({ ...branchForm, status: value as Branch['status'] })} data={['Active', 'Inactive']} /><Group justify="flex-end"><Button variant="default" disabled={saving} onClick={closeBranch}>Cancel</Button><Button onClick={submitBranch} loading={saving}>Save branch</Button></Group></Stack>
       </Modal>
     </>
   )
@@ -161,4 +193,12 @@ function updateRate(index: number, field: keyof Omit<HeadCoachRate, 'id'>, value
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong'
+}
+
+function updateAccessBaseline(baseline: string, profile: Profile, memberships: Array<{ user_id: string; branch_id: number }>) {
+  const [baselineProfiles, baselineMemberships] = JSON.parse(baseline) as [Profile[], Array<{ user_id: string; branch_id: number }>]
+  return JSON.stringify([
+    baselineProfiles.map((item) => item.id === profile.id ? profile : item),
+    [...baselineMemberships.filter((item) => item.user_id !== profile.id), ...memberships.filter((item) => item.user_id === profile.id)],
+  ])
 }

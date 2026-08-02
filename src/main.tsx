@@ -9,6 +9,7 @@ import './index.css'
 import './motion.css'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
+import { NavigationGuardProvider } from './contexts/NavigationGuardContext'
 
 const theme = createTheme({
   primaryColor: 'orange',
@@ -26,12 +27,24 @@ const queryClient = new QueryClient({
   },
 })
 
+function syncViewport() {
+  const viewport = window.visualViewport
+  document.documentElement.style.setProperty('--viewport-width', `${Math.round(viewport?.width || window.innerWidth)}px`)
+  document.documentElement.style.setProperty('--viewport-height', `${Math.round(viewport?.height || window.innerHeight)}px`)
+}
+
+syncViewport()
+window.addEventListener('resize', syncViewport)
+window.addEventListener('orientationchange', syncViewport)
+window.visualViewport?.addEventListener('resize', syncViewport)
+window.visualViewport?.addEventListener('scroll', syncViewport)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="light">
       <Notifications position="top-right" />
       <QueryClientProvider client={queryClient}>
-        <AuthProvider><App /></AuthProvider>
+        <AuthProvider><NavigationGuardProvider><App /></NavigationGuardProvider></AuthProvider>
       </QueryClientProvider>
     </MantineProvider>
   </StrictMode>,

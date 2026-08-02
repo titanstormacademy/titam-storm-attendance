@@ -1,7 +1,7 @@
 import { supabase, signedReceiptUrl } from './supabase'
 import type { Payment, PaymentMethod, PaymentStatus } from '../types/models'
 
-export async function updatePayment(id: number, input: {
+export async function updatePayment(branchId: number, id: number, input: {
   student_id: number
   fee_month: string
   amount: number
@@ -13,21 +13,21 @@ export async function updatePayment(id: number, input: {
   coach_id: number | null
   receipt_path: string | null
 }) {
-  const currentResult = await supabase.from('payments').select('student_id,fee_month,status,coach_id,commission_settled').eq('id', id).single()
+  const currentResult = await supabase.from('payments').select('student_id,fee_month,status,coach_id,commission_settled').eq('id', id).eq('branch_id', branchId).single()
   if (currentResult.error) throw new Error(currentResult.error.message)
   const current = currentResult.data
   const nextMonth = `${input.fee_month}-01`
   if (current.commission_settled && (current.student_id !== input.student_id || current.fee_month !== nextMonth || current.status !== input.status || current.coach_id !== input.coach_id)) {
     throw new Error('Undo the linked coach payout before changing the student, fee month, status, or coach.')
   }
-  const { data, error } = await supabase.from('payments').update({ ...input, reference_no: input.reference_no.trim(), fee_month: nextMonth }).eq('id', id).select().single()
+  const { data, error } = await supabase.from('payments').update({ ...input, reference_no: input.reference_no.trim(), fee_month: nextMonth }).eq('id', id).eq('branch_id', branchId).select().single()
   if (error) throw new Error(error.message)
   return data as Payment
 }
 
-export async function deletePayment(payment: Payment) {
+export async function deletePayment(branchId: number, payment: Payment) {
   if (payment.commission_settled || payment.coach_payment_id) throw new Error('Undo the linked coach payout before deleting this settled payment.')
-  const { error } = await supabase.from('payments').delete().eq('id', payment.id)
+  const { error } = await supabase.from('payments').delete().eq('id', payment.id).eq('branch_id', branchId)
   if (error) throw new Error(error.message)
 }
 

@@ -276,6 +276,7 @@ def transform(path):
             "rate": decimal_value(row.get("Rate"), 0),
             "students_count": integer_value(row.get("StudentsCount"), 0),
             "date_paid": date_value(row.get("DatePaid")),
+            "pay_month": month_value(row.get("DatePaid")) if coaches_by_id.get(integer_value(row.get("CoachID")), "Head") == "Assistant" else None,
             "remarks": key(row.get("Remarks")),
         } for row in rows["CoachPayments"]],
         "payments": [{

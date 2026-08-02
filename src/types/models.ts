@@ -24,6 +24,7 @@ export interface Student {
   nric: string
   gender: '' | 'Male' | 'Female'
   date_of_birth: string | null
+  age: number | null
   height: string
   school: string
   tshirt_size: string
@@ -79,6 +80,7 @@ export interface Enrollment {
   student_id: number
   class_id: number
   start_date: string
+  end_date: string | null
 }
 
 export interface Attendance {

@@ -21,7 +21,15 @@ Configure `.env.local` with the Supabase project URL and publishable key. Never 
 
 ## Database
 
-Apply the SQL files in `supabase/migrations/` in filename order. Existing installations that already ran the initial schema must also run `202607300002_legacy_parity.sql`. The first registered account becomes an administrator.
+Apply the SQL files in `supabase/migrations/` in filename order. Existing installations that already ran the initial schema must also run `202607300002_legacy_parity.sql`. New accounts always start as staff. To bootstrap the first account administrator, create the account and run this once in the Supabase SQL Editor, replacing the email:
+
+```sql
+update public.profiles
+set role = 'admin', login_kind = 'account'
+where id = (select id from auth.users where email = 'owner@example.com');
+```
+
+After bootstrap, that administrator can assign roles from Settings.
 
 ## Verification
 
@@ -29,6 +37,8 @@ Apply the SQL files in `supabase/migrations/` in filename order. Existing instal
 npm run lint
 npm run typecheck
 npm run build
+npm run test:e2e
+npx supabase test db
 ```
 
 ## Cloudflare Pages

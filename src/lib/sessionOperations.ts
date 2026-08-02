@@ -8,8 +8,9 @@ export async function getClassSessions(classId: number) {
 }
 
 export async function saveSession(input: { id?: number; branch_id: number; class_id: number; session_date: string; notes: string; coach_id: number | null }) {
-  const query = input.id
-    ? supabase.from('sessions').update(input).eq('id', input.id)
+  const { id, branch_id, class_id, ...changes } = input
+  const query = id
+    ? supabase.from('sessions').update(changes).eq('id', id).eq('branch_id', branch_id).eq('class_id', class_id)
     : supabase.from('sessions').insert(input)
   const { data, error } = await query.select('*,class:classes(id,label,start_time,end_time),coach:coaches(id,name)').single()
   if (error) throw new Error(error.message)

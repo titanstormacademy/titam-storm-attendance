@@ -10,24 +10,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const simpleLoginInProgress = useRef(false)
+  const sessionRequest = useRef(0)
 
   useEffect(() => {
     let active = true
 
     async function applySession(nextSession: Session | null) {
+      const requestId = ++sessionRequest.current
       if (!active) return
       if (nextSession?.user) setLoading(true)
       setSession(nextSession)
+      setProfile(null)
       if (simpleLoginInProgress.current && nextSession?.user?.is_anonymous) return
       if (!nextSession?.user) {
-        setProfile(null)
         setLoading(false)
         return
       }
       try {
-        setProfile(await getProfile(nextSession.user.id))
+        const nextProfile = await getProfile(nextSession.user.id)
+        if (active && requestId === sessionRequest.current) setProfile(nextProfile)
       } finally {
-        if (active) setLoading(false)
+        if (active && requestId === sessionRequest.current) setLoading(false)
       }
     }
 
