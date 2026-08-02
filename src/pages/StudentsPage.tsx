@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Badge, Box, Button, Checkbox, FileButton, Grid, Group, Modal, NumberInput, Paper, SegmentedControl, Select, Stack, Tabs, Text, TextInput, ThemeIcon } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, Checkbox, FileButton, Grid, Group, NumberInput, Paper, SegmentedControl, Select, Stack, Tabs, Text, TextInput, ThemeIcon } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconCalendarCheck, IconCamera, IconMessageCircle, IconPlus, IconSearch, IconTrash, IconUserOff, IconUsers } from '@tabler/icons-react'
 import { deleteStudent, removeReceiptIfUnreferenced, removeUploadedImage, saveStudent, saveStudentWithEnrollments, uploadImage } from '../lib/api'
 import { getStudentAttendance, type StudentAttendanceEntry } from '../lib/studentOperations'
 import { publicImageUrl } from '../lib/supabase'
-import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox } from '../components/ui'
+import { EmptyState, PageHeader, PersonAvatar, PhotoLightbox, ResponsiveModal } from '../components/ui'
 import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { BootstrapData, Student } from '../types/models'
 
@@ -202,12 +202,12 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
     {filtered.length ? <Box className="student-directory-grid">{filtered.map((student) => {
       const enrollmentCount = new Set(data.enrollments.filter((item) => item.student_id === student.id && !item.end_date).map((item) => item.class_id)).size
       const src = publicImageUrl('student-photos', student.photo_path)
-      return <Paper key={student.id} component={isAdmin ? 'button' : 'div'} type={isAdmin ? 'button' : undefined} className={`student-directory-card ${isAdmin ? '' : 'read-only'}`} p="sm" radius="lg" withBorder onClick={isAdmin ? () => showProfile(student) : undefined}><PersonAvatar name={student.name} src={src} size={68} onClick={!isAdmin ? () => setPhotoView({ src, name: student.name }) : undefined} /><Text className="student-directory-name" fw={700} size="sm" mt="xs" lineClamp={2}>{student.name}</Text><Text size="xs" c="dimmed" mt={3}>{enrollmentCount ? `${enrollmentCount} class${enrollmentCount > 1 ? 'es' : ''}` : 'No class'}</Text><Badge mt="xs" size="sm" variant="light" color={statusColor(student.status)}>{student.status}</Badge></Paper>
+      return <Paper key={student.id} component="button" type="button" className="student-directory-card" p="sm" radius="lg" withBorder onClick={() => showProfile(student)}><PersonAvatar name={student.name} src={src} size={68} /><Text className="student-directory-name" fw={700} size="sm" mt="xs" lineClamp={2}>{student.name}</Text><Text size="xs" c="dimmed" mt={3}>{enrollmentCount ? `${enrollmentCount} class${enrollmentCount > 1 ? 'es' : ''}` : 'No class'}</Text><Badge mt="xs" size="sm" variant="light" color={statusColor(student.status)}>{student.status}</Badge></Paper>
     })}</Box> : <EmptyState title="No students found" message="Try changing the filters or add your first student." icon={status === 'Inactive' ? IconUserOff : IconUsers} />}
 
     {isAdmin && <ActionIcon className="student-fab" aria-label="Add student" size={58} radius="xl" color="orange" onClick={() => showProfile()}><IconPlus size={26} /></ActionIcon>}
 
-    <Modal opened={opened} onClose={guardedClose} title={form.id ? form.name : 'Add student'} size="lg" centered closeOnClickOutside={!saving} closeOnEscape={!saving}>
+    <ResponsiveModal classNames={{ inner: 'student-profile-modal-inner', content: 'student-profile-modal-content' }} transitionProps={{ transition: 'fade', duration: 0 }} opened={opened} onClose={guardedClose} title={form.id ? form.name : 'Add student'} size="lg" centered closeOnClickOutside={!saving} closeOnEscape={!saving}>
       <Stack>
         <Group wrap="nowrap" className="student-profile-hero">
           <Box className="profile-photo-editor">
@@ -245,7 +245,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
         </Tabs>
         {isAdmin && <Group className="modal-actions" justify="space-between"><Button variant="subtle" color="red" disabled={!form.id || saving} onClick={() => form.id && remove(form as Student)} leftSection={<IconTrash size={16} />}>Delete</Button><Group><Button variant="default" disabled={saving} onClick={guardedClose}>Cancel</Button><Button loading={saving} onClick={submit}>Save student</Button></Group></Group>}
       </Stack>
-    </Modal>
+    </ResponsiveModal>
     <PhotoLightbox src={photoView?.src || null} name={photoView?.name || 'Student photo'} opened={Boolean(photoView)} onClose={() => setPhotoView(null)} />
   </>
 }

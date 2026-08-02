@@ -30,9 +30,9 @@ async function mockBackend(page: Page) {
     }
     if (url.pathname === '/rest/v1/rpc/login_as_basic') return json(route, { id: userId, full_name: 'E2E Staff', role: 'staff' })
     if (url.pathname === '/rest/v1/rpc/login_with_shared_admin_password') { adminLogin = true; return json(route, { ok: true, profile: { id: userId, full_name: 'E2E Admin', role: 'admin' } }) }
-    if (url.pathname === '/rest/v1/rpc/get_basic_bootstrap') return json(route, { students: [], coaches: [], classes: [], sessions: [], enrollments: [], payments: [] })
+    if (url.pathname === '/rest/v1/rpc/get_basic_bootstrap') return json(route, { students: [{ id: 102, branch_id: 1, name: 'Basic Student', nric: '', gender: '', date_of_birth: null, age: null, height: '', school: '', tshirt_size: '', student_phone: '', parent_name: '', parent_contact: '', email: '', father_height: '', mother_height: '', monthly_fee: null, level: 'Beginner', status: 'Active', photo_path: null, created_at: new Date().toISOString() }], coaches: [], classes: [], sessions: [], enrollments: [], payments: [] })
     if (url.pathname === '/rest/v1/profiles') return json(route, { id: userId, full_name: adminLogin ? 'E2E Admin' : 'E2E Staff', role: adminLogin ? 'admin' : 'staff' })
-    if (url.pathname === '/rest/v1/branches') return json(route, [{ id: 1, name: 'Main Branch', subtitle: 'E2E', status: 'Active' }])
+    if (url.pathname === '/rest/v1/branches') return json(route, [{ id: 1, name: 'Main Branch', subtitle: 'E2E', status: 'Active' }, { id: 2, name: 'Second Branch', subtitle: 'E2E 2', status: 'Active' }])
     if (url.pathname === '/rest/v1/academy_settings') return json(route, { academy_name: 'Titan Storm', logo_path: null, default_branch_id: 1 })
     if (url.pathname === '/rest/v1/students') {
       const today = new Date()
@@ -79,6 +79,59 @@ test('browser Back returns through top-level app navigation', async ({ page, isM
   await page.goBack()
   await expect(page).toHaveURL(/page=attendance/)
   await expect(page.getByRole('heading', { name: 'Attendance' })).toBeVisible()
+})
+
+test('basic users can open a read-only student profile from the card', async ({ page, isMobile }) => {
+  await login(page)
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: /Basic Student/ }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByLabel('Full name')).toHaveValue('Basic Student')
+  await expect(page.getByLabel('Full name')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Save student' })).toHaveCount(0)
+})
+
+test('student profile fits the mobile visual viewport', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile modal sizing')
+  await login(page)
+  const navigation = page.getByRole('navigation', { name: 'Primary navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: /Basic Student/ }).click()
+  const bounds = await page.getByRole('dialog').evaluate((dialog) => {
+    const rect = dialog.getBoundingClientRect()
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height, viewportWidth: visualViewport?.width || innerWidth, viewportHeight: visualViewport?.height || innerHeight }
+  })
+  expect(bounds.left).toBeGreaterThanOrEqual(-1)
+  expect(bounds.top).toBeGreaterThanOrEqual(-1)
+  expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth + 1)
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight + 1)
+})
+
+test('branch switching does not enlarge the mobile viewport', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile viewport behavior')
+  await login(page)
+  const before = await page.evaluate(() => ({ width: visualViewport?.width || innerWidth, scale: visualViewport?.scale || 1 }))
+  const branch = page.getByRole('textbox', { name: 'Active branch' })
+  expect(Number.parseFloat(await branch.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16)
+  await branch.click()
+  await page.getByRole('option', { name: 'Second Branch' }).click()
+  await expect(branch).toHaveValue('Second Branch')
+  const after = await page.evaluate(() => ({ width: visualViewport?.width || innerWidth, scale: visualViewport?.scale || 1, scrollX }))
+  expect(Math.abs(after.width - before.width)).toBeLessThanOrEqual(1)
+  expect(after.scale).toBe(before.scale)
+  expect(after.scrollX).toBe(0)
+})
+
+test('administrators can open an editable student profile from the card', async ({ page, isMobile }) => {
+  await login(page, true)
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: /Birthday Student/ }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByLabel('Full name')).toHaveValue('Birthday Student')
+  await expect(page.getByLabel('Full name')).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Save student' })).toBeVisible()
 })
 
 test('Overview shows a student whose birthday is today', async ({ page }) => {

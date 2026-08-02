@@ -133,6 +133,14 @@ export default function App() {
     navbar.close()
   }
 
+  function prepareBranchPicker() {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'))
+      window.scrollTo({ left: 0, behavior: 'auto' })
+    })
+  }
+
   function changeBranch(value: string | null) {
     if (!value || !confirmLeave()) return
     const nextPage: PageKey = 'dashboard'
@@ -193,7 +201,7 @@ export default function App() {
             <Box visibleFrom="sm"><Text className="desktop-brand-name" fw={850} lh={1.1}>{settingsQuery.data?.academy_name || 'Titan Storm'}</Text><Text className="desktop-brand-subtitle" size="xs">Academy operations</Text></Box>
           </Group>
           <Group className="app-header-actions" gap="md" wrap="nowrap">
-            <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onChange={changeBranch} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
+            <Select className="branch-select" aria-label="Active branch" leftSection={<IconBuilding size={16} />} value={branchId ? String(branchId) : null} onPointerDown={prepareBranchPicker} onDropdownOpen={() => requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))} onChange={changeBranch} data={activeBranches.map((branch) => ({ value: String(branch.id), label: branch.name }))} w={{ base: 148, sm: 210 }} allowDeselect={false} />
             <Menu position="bottom-end" shadow="lg">
               <Menu.Target>
                 <Button className="profile-menu-trigger" aria-label={`Open account menu for ${profile.full_name}`} variant="subtle" color="dark" px="xs" rightSection={<Box visibleFrom="sm"><IconChevronDown size={14} /></Box>}>

@@ -5,6 +5,8 @@
 :root {
   --viewport-width: 100vw;
   --viewport-height: 100dvh;
+  --viewport-left: 0px;
+  --viewport-top: 0px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,6 +25,7 @@ body,
 }
 
 body {
+  touch-action: manipulation;
   background:
     radial-gradient(circle at 90% -10%, rgba(242, 101, 34, 0.1), transparent 30%),
     #f5f7fa;
@@ -1026,6 +1029,7 @@ select {
     min-height: 44px;
     height: 44px;
     padding-right: 30px;
+    font-size: 1rem;
     text-overflow: ellipsis;
   }
 
@@ -1246,6 +1250,29 @@ select {
   .mantine-Modal-body {
     padding-bottom: calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom)) !important;
     overflow-y: auto;
+  }
+
+  .student-profile-modal-inner {
+    width: var(--viewport-width) !important;
+    max-width: var(--viewport-width) !important;
+    height: var(--viewport-height) !important;
+    min-height: 0 !important;
+    max-height: var(--viewport-height) !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+
+  .student-profile-modal-content {
+    position: fixed !important;
+    top: var(--viewport-top) !important;
+    left: var(--viewport-left) !important;
+    width: var(--viewport-width) !important;
+    max-width: var(--viewport-width) !important;
+    height: var(--viewport-height) !important;
+    min-height: 0 !important;
+    max-height: var(--viewport-height) !important;
+    border-radius: 0 !important;
+    overflow: hidden;
   }
 
   body:has(.mantine-Modal-overlay) .mobile-nav {

@@ -31,6 +31,8 @@ function syncViewport() {
   const viewport = window.visualViewport
   document.documentElement.style.setProperty('--viewport-width', `${Math.round(viewport?.width || window.innerWidth)}px`)
   document.documentElement.style.setProperty('--viewport-height', `${Math.round(viewport?.height || window.innerHeight)}px`)
+  document.documentElement.style.setProperty('--viewport-left', `${viewport?.offsetLeft || 0}px`)
+  document.documentElement.style.setProperty('--viewport-top', `${viewport?.offsetTop || 0}px`)
 }
 
 syncViewport()
