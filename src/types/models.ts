@@ -91,6 +91,7 @@ export interface Attendance {
   attendance_date: string
   status: '' | 'Present'
   remarks: string
+  is_trial: boolean
 }
 
 export interface CoachAttendance {

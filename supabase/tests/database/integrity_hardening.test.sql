@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(33);
 
 insert into auth.users (id, email) values ('00000000-0000-4000-8000-000000000001', 'admin@example.test');
 select is((select role::text from public.profiles where id = '00000000-0000-4000-8000-000000000001'), 'staff', 'new accounts always start as staff');
@@ -9,7 +9,8 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 
 insert into public.students (id, branch_id, name, status, monthly_fee) values
   (9001, 1, 'Temporal Student', 'Active', 150),
-  (9002, 1, 'Inactive Student', 'Inactive', 150);
+  (9002, 1, 'Inactive Student', 'Inactive', 150),
+  (9003, 1, 'Trial Student', 'Trial', 150);
 insert into public.coaches (id, branch_id, name, coach_type, hourly_rate) values
   (9001, 1, 'Head Coach', 'Head', 0),
   (9002, 1, 'Assistant Coach', 'Assistant', 100);
@@ -79,6 +80,10 @@ select throws_ok(
 select lives_ok($$select public.set_attendance_remark(9001, 9001, 'Arrived early')$$, 'attendance remark can be saved independently');
 select lives_ok($$select public.set_attendance_status(9001, 9001, 'Present')$$, 'attendance status can be saved independently');
 select is((select remarks from public.attendance where student_id = 9001 and session_id = 9001), 'Arrived early', 'status update does not overwrite remarks');
+select lives_ok($$select public.set_attendance_status(9003, 9001, 'Present')$$, 'trial student attendance can be marked present');
+select is((select is_trial from public.attendance where student_id = 9003 and session_id = 9001), true, 'trial student attendance defaults to trial');
+select lives_ok($$select public.set_attendance_trial(9003, 9001, false)$$, 'coach can correct the trial identifier');
+select is((select is_trial from public.attendance where student_id = 9003 and session_id = 9001), false, 'corrected attendance is counted normally');
 select throws_ok(
   $$select * from public.mark_all_present(9001, array[9002]::bigint[])$$,
   'P0001',

@@ -24,8 +24,8 @@ function fixtureData() {
   const sessions = [{ id: 501, branch_id: 1, class_id: 401, session_date: today, notes: 'Bring both jerseys', coach_id: 301, class: { id: 401, label: classes[0].label, start_time: '09:00:00', end_time: '10:30:00' }, coach: { id: 301, name: 'Jordan Head Coach' } }]
   const enrollments = [{ id: 601, branch_id: 1, student_id: 201, class_id: 401, start_date: `${now.getFullYear()}-01-01`, end_date: null }]
   const payments = [{ id: 701, branch_id: 1, student_id: 201, fee_month: month, amount: 150, method: 'Bank Transfer', status: 'Paid', date_received: today, remarks: 'Monthly fee', reference_no: 'UX-001', coach_id: 301, commission_settled: false, coach_payment_id: null, receipt_path: null, student: { id: 201, name: students[0].name, monthly_fee: 150 }, coach: { id: 301, name: coaches[0].name } }]
-  const attendance = [{ student_id: 201, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'On time' }]
-  const reportAttendance = attendance.map((record) => ({ ...record, student: { id: 201, name: students[0].name, status: 'Active', gender: 'Female', level: 'Intermediate' }, class: { id: 401, label: classes[0].label } }))
+  const attendance = [{ student_id: 201, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'On time', is_trial: false }, { student_id: 202, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'First visit', is_trial: true }]
+  const reportAttendance = attendance.map((record) => { const student = students.find((item) => item.id === record.student_id)!; return { ...record, student: { id: student.id, name: student.name, status: student.status, gender: student.gender, level: student.level }, class: { id: 401, label: classes[0].label } } })
   const coachAttendance = [{ id: 801, branch_id: 1, session_id: 501, class_id: 401, attendance_date: today, coach_id: 302, hours: 1.5, coach_payment_id: null }]
   return { today, month, students, coaches, classes, sessions, enrollments, payments, attendance, reportAttendance, coachAttendance }
 }
@@ -60,6 +60,14 @@ async function mockAdminBackend(page: Page, options: { failBootstrap?: boolean; 
     if (url.pathname === '/rest/v1/head_coach_rates') return options.failSettings ? respond(route, { message: 'Settings unavailable' }, 500) : respond(route, [{ id: 901, min_students: 1, max_students: 49, min_fee: 0, max_fee: 99999, payout: 30 }])
     if (url.pathname === '/rest/v1/branch_memberships') return respond(route, [])
     if (url.pathname === '/rest/v1/coach_payments') return respond(route, [])
+    if (url.pathname === '/rest/v1/rpc/set_attendance_trial') {
+      const input = request.postDataJSON() as { p_student_id: number; p_is_trial: boolean }
+      const record = data.attendance.find((item) => item.student_id === input.p_student_id)!
+      record.is_trial = input.p_is_trial
+      const reportRecord = data.reportAttendance.find((item) => item.student_id === input.p_student_id)!
+      reportRecord.is_trial = input.p_is_trial
+      return respond(route, record)
+    }
     if (url.pathname === '/rest/v1/rpc/get_head_coach_commission') return respond(route, { type: 'Head', units: 1, students: 1, commission: 30, unmatched: 0, items: [{ paymentId: 701, studentId: 201, studentName: data.students[0].name, feeMonth: data.month.slice(0, 7), dateReceived: data.today, receivedMonth: data.month.slice(0, 7), fee: 150, payout: 30 }] })
     if (url.pathname === '/rest/v1/rpc/get_assistant_pay') return respond(route, { type: 'Assistant', month: data.month.slice(0, 7), hours: 1.5, hourlyRate: 80, total: 120, sessions: [{ date: data.today, className: data.classes[0].label, hours: 1.5 }] })
     return respond(route, [])
@@ -110,6 +118,21 @@ const screens = [
   { label: 'Reports', heading: 'Reports' },
   { label: 'Settings', heading: 'Settings' },
 ]
+
+test('trial attendance is tagged and excluded from counted report sessions', async ({ page, isMobile }) => {
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Attendance', 'Attendance')
+  await page.getByRole('button', { name: /Elite Development Training/ }).first().click()
+  await expect(page.getByText('Counted attendance', { exact: true })).toBeVisible()
+  const trialCard = page.locator('.attendance-student-card').filter({ hasText: 'Blake Trial' })
+  await expect(trialCard.getByText('Trial session', { exact: true })).toBeVisible()
+  await expect(trialCard.getByLabel('Trial session — excluded from counted attendance')).toBeChecked()
+  await navigate(page, Boolean(isMobile), 'Reports', 'Reports')
+  const trialStudent = page.getByRole('button', { name: /Blake Trial/ })
+  await expect(trialStudent).toContainText('1')
+  await trialStudent.click()
+  await expect(page.getByText('Trial', { exact: true }).last()).toBeVisible()
+})
 
 test('bootstrap failures show a retry action instead of an endless skeleton', async ({ page }) => {
   await loginAdmin(page, { failBootstrap: true })

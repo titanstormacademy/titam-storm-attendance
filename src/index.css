@@ -743,6 +743,11 @@ select {
   border-left-color: #22c55e !important;
 }
 
+.attendance-student-card.trial {
+  background: #fff7ed;
+  border-left-color: #f59e0b !important;
+}
+
 .attendance-student-card .mantine-Avatar-root {
   flex: 0 0 auto;
   box-shadow: 0 6px 16px -10px rgba(13, 21, 38, 0.6);
@@ -1421,6 +1426,11 @@ select {
 [data-mantine-color-scheme='dark'] .attendance-student-card.present {
   background: #11291f;
   border-color: #1f6b46 !important;
+}
+
+[data-mantine-color-scheme='dark'] .attendance-student-card.trial {
+  background: #332116;
+  border-color: #b86a1a !important;
 }
 
 [data-mantine-color-scheme='dark'] .class-picker,

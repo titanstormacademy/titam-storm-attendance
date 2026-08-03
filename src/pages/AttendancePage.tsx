@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { ActionIcon, Alert, Badge, Box, Button, Divider, Group, Modal, Paper, ScrollArea, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Box, Button, Checkbox, Divider, Group, Modal, Paper, ScrollArea, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconArrowLeft, IconCheck, IconChevronRight, IconSearch, IconTrash, IconUserPlus, IconUsers } from '@tabler/icons-react'
-import { addCoachAttendance, ensureTodaySession, getAttendance, getCoachAttendance, markAllPresent, removeAttendance, removeCoachAttendance, setAttendanceRemark, setAttendanceStatus } from '../lib/api'
+import { addCoachAttendance, ensureTodaySession, getAttendance, getCoachAttendance, markAllPresent, removeAttendance, removeCoachAttendance, setAttendanceRemark, setAttendanceStatus, setAttendanceTrial } from '../lib/api'
 import { getClassSessions } from '../lib/sessionOperations'
 import { publicImageUrl } from '../lib/supabase'
 import { EmptyState, PageHeader, PageLoader, PersonAvatar, PhotoLightbox } from '../components/ui'
@@ -63,13 +63,8 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
       && (walkinLevel === 'All' || student.level === walkinLevel)
   }).sort((a, b) => a.name.localeCompare(b.name))
   const present = records.filter((record) => record.status === 'Present')
-  const breakdown = present.reduce((result, record) => {
-    const student = data.students.find((item) => item.id === record.student_id)
-    if (student?.status === 'Trial') result.trial += 1
-    else if (!effectiveEnrollmentIds.has(record.student_id)) result.replacement += 1
-    else result.regular += 1
-    return result
-  }, { regular: 0, trial: 0, replacement: 0 })
+  const trialCount = present.filter((record) => record.is_trial).length
+  const countedAttendance = present.length - trialCount
   const notMarked = allEnrolled.filter((student) => !records.some((record) => record.student_id === student.id && record.status === 'Present')).length
   const groupedStudents = useMemo(() => {
     const groups = new Map<string, Student[]>()
@@ -240,6 +235,24 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
     }
   }
 
+  async function updateTrial(student: Student, isTrial: boolean) {
+    if (!session) return
+    const sessionId = session.id
+    const key = `${sessionId}:${student.id}`
+    if (mutationLocks.current.has(key)) return
+    mutationLocks.current.add(key)
+    setPendingStudents((current) => new Set(current).add(student.id))
+    try {
+      const saved = await setAttendanceTrial(student.id, sessionId, isTrial)
+      if (sessionRef.current?.id === sessionId) setRecords((current) => [...current.filter((record) => record.student_id !== student.id), saved])
+    } catch (error) {
+      notifications.show({ color: 'red', message: errorMessage(error) })
+    } finally {
+      mutationLocks.current.delete(key)
+      setPendingStudents((current) => { const next = new Set(current); next.delete(student.id); return next })
+    }
+  }
+
   async function markAll() {
     if (!session || !academyClass || mutationPending) return
     setBulkPending(true)
@@ -327,7 +340,7 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
 
       {loading ? <PageLoader label="Loading attendance…" /> : loadError ? <Alert color="red" title="Could not load attendance">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : session ? <Stack gap="md">
         <SimpleGrid cols={2} spacing="sm" className="attendance-summary-grid">
-          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{present.length}</Text><Text size="xs" c="dimmed">Present</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">Regular <b>{breakdown.regular}</b></Text><Text size="xs" c="orange">Trial <b>{breakdown.trial}</b></Text><Text size="xs" c="blue">Replacement <b>{breakdown.replacement}</b></Text></Group></Paper>
+          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{countedAttendance}</Text><Text size="xs" c="dimmed">Counted attendance</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">All present <b>{present.length}</b></Text><Text size="xs" c="orange">Trial <b>{trialCount}</b></Text></Group></Paper>
           <Paper className="attendance-summary-card" p="lg" radius="lg"><Text className="attendance-summary-value">{notMarked}</Text><Text size="xs" c="dimmed">Not marked</Text></Paper>
         </SimpleGrid>
 
@@ -341,12 +354,12 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
 
         <Box>
           <Text className="attendance-section-label">Enrolled students</Text>
-          {groupedStudents.length ? groupedStudents.map(([group, students]) => <Box key={group} mb="lg"><Group gap="xs" mb="xs"><Text className="attendance-level-label">{group}</Text><Badge size="sm" color="gray" variant="light">{students.length}</Badge></Group><Stack gap="xs">{students.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={remarkDrafts[student.id] ?? records.find((record) => record.student_id === student.id)?.remarks ?? ''} onToggle={() => toggle(student)} onRemarkChange={(value) => setRemarkDrafts((current) => ({ ...current, [student.id]: value }))} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} disabled={bulkPending || pendingStudents.has(student.id)} />)}</Stack></Box>) : <Text c="dimmed" py="md">No students match this filter.</Text>}
+          {groupedStudents.length ? groupedStudents.map(([group, students]) => <Box key={group} mb="lg"><Group gap="xs" mb="xs"><Text className="attendance-level-label">{group}</Text><Badge size="sm" color="gray" variant="light">{students.length}</Badge></Group><Stack gap="xs">{students.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={remarkDrafts[student.id] ?? records.find((record) => record.student_id === student.id)?.remarks ?? ''} isTrial={Boolean(records.find((record) => record.student_id === student.id)?.is_trial)} onToggle={() => toggle(student)} onTrial={(checked) => updateTrial(student, checked)} onRemarkChange={(value) => setRemarkDrafts((current) => ({ ...current, [student.id]: value }))} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} disabled={bulkPending || pendingStudents.has(student.id)} />)}</Stack></Box>) : <Text c="dimmed" py="md">No students match this filter.</Text>}
         </Box>
 
         <Box>
           <Group justify="space-between" mb="xs"><Text className="attendance-section-label" mb={0}>Walk-ins</Text><Button size="xs" leftSection={<IconUserPlus size={15} />} onClick={openWalkinPicker}>Add walk-in</Button></Group>
-          {walkins.length ? <Stack gap="xs">{walkins.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={remarkDrafts[student.id] ?? records.find((record) => record.student_id === student.id)?.remarks ?? ''} onToggle={() => toggle(student)} onRemarkChange={(value) => setRemarkDrafts((current) => ({ ...current, [student.id]: value }))} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} onDelete={() => deleteWalkin(student.id)} disabled={bulkPending || pendingStudents.has(student.id)} />)}</Stack> : <Text size="sm" c="dimmed">No walk-ins recorded.</Text>}
+          {walkins.length ? <Stack gap="xs">{walkins.map((student) => <AttendanceStudentCard key={`${session.id}-${student.id}`} student={student} present={records.find((record) => record.student_id === student.id)?.status === 'Present'} remarks={remarkDrafts[student.id] ?? records.find((record) => record.student_id === student.id)?.remarks ?? ''} isTrial={Boolean(records.find((record) => record.student_id === student.id)?.is_trial)} onToggle={() => toggle(student)} onTrial={(checked) => updateTrial(student, checked)} onRemarkChange={(value) => setRemarkDrafts((current) => ({ ...current, [student.id]: value }))} onRemark={(value) => updateRemark(student, value)} onPhoto={() => setPhotoView({ src: publicImageUrl('student-photos', student.photo_path), name: student.name })} onDelete={() => deleteWalkin(student.id)} disabled={bulkPending || pendingStudents.has(student.id)} />)}</Stack> : <Text size="sm" c="dimmed">No walk-ins recorded.</Text>}
         </Box>
       </Stack> : <EmptyState title="No sessions recorded" message="Create or generate a session from Classes, then return here." icon={IconUsers} />}
 
@@ -372,8 +385,8 @@ function AttendanceClassCard({ item, enrolled, action, onClick }: { item: Academ
   return <Paper component="button" type="button" className="attendance-class-card" p="md" radius="lg" withBorder onClick={onClick}><Box><Text fw={800}>{item.label}</Text><Text c="dimmed" size="sm" mt={3}>{item.day_of_week} · {formatTime(item.start_time)} – {formatTime(item.end_time)}</Text></Box><Box ta="right"><Text className="attendance-card-action">{action} <IconChevronRight size={14} /></Text><Text c="dimmed" size="xs">{enrolled} enrolled</Text></Box></Paper>
 }
 
-function AttendanceStudentCard({ student, present, remarks, disabled, onToggle, onRemarkChange, onRemark, onPhoto, onDelete }: { student: Student; present: boolean; remarks: string; disabled: boolean; onToggle: () => void; onRemarkChange: (value: string) => void; onRemark: (value: string) => void; onPhoto: () => void; onDelete?: () => void }) {
-  return <Paper className={`attendance-student-card ${present ? 'present' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} onClick={onPhoto} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Text size="xs" c="dimmed">{student.status}</Text></Box><Button className="attendance-present-button" aria-pressed={present} aria-label={`Mark ${student.name} ${present ? 'not present' : 'present'}`} color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} disabled={disabled} loading={disabled} onClick={onToggle}>{present ? 'Present ✓' : 'Mark present'}</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" disabled={disabled} onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group><TextInput aria-label={`Remarks for ${student.name}`} value={remarks} disabled={disabled} onChange={(event) => onRemarkChange(event.currentTarget.value)} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
+function AttendanceStudentCard({ student, present, remarks, isTrial, disabled, onToggle, onTrial, onRemarkChange, onRemark, onPhoto, onDelete }: { student: Student; present: boolean; remarks: string; isTrial: boolean; disabled: boolean; onToggle: () => void; onTrial: (checked: boolean) => void; onRemarkChange: (value: string) => void; onRemark: (value: string) => void; onPhoto: () => void; onDelete?: () => void }) {
+  return <Paper className={`attendance-student-card ${present ? 'present' : ''} ${isTrial ? 'trial' : ''}`} p="md" radius="lg" withBorder><Group wrap="nowrap"><PersonAvatar name={student.name} src={publicImageUrl('student-photos', student.photo_path)} size={64} onClick={onPhoto} /><Box flex={1} style={{ minWidth: 0 }}><Text fw={750} truncate>{student.name}</Text><Group gap="xs"><Text size="xs" c="dimmed">{student.status}</Text>{isTrial && <Badge size="xs" color="orange" variant="light">Trial session</Badge>}</Group></Box><Button className="attendance-present-button" aria-pressed={present} aria-label={`Mark ${student.name} ${present ? 'not present' : 'present'}`} color={present ? 'green' : 'gray'} variant={present ? 'filled' : 'default'} disabled={disabled} loading={disabled} onClick={onToggle}>{present ? 'Present ✓' : 'Mark present'}</Button>{onDelete && <ActionIcon aria-label={`Remove ${student.name}`} color="red" variant="subtle" disabled={disabled} onClick={onDelete}><IconTrash size={17} /></ActionIcon>}</Group>{present && <Checkbox mt="sm" checked={isTrial} disabled={disabled} onChange={(event) => onTrial(event.currentTarget.checked)} label="Trial session — excluded from counted attendance" />}<TextInput aria-label={`Remarks for ${student.name}`} value={remarks} disabled={disabled} onChange={(event) => onRemarkChange(event.currentTarget.value)} onBlur={(event) => onRemark(event.currentTarget.value)} placeholder="Remarks (optional)" mt="sm" /></Paper>
 }
 
 function nearestSession(items: Session[]) {

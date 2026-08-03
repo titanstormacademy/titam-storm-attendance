@@ -157,6 +157,10 @@ export async function setAttendanceRemark(studentId: number, sessionId: number, 
   return unwrap(await supabase.rpc('set_attendance_remark', { p_student_id: studentId, p_session_id: sessionId, p_remarks: remarks })) as Attendance
 }
 
+export async function setAttendanceTrial(studentId: number, sessionId: number, isTrial: boolean) {
+  return unwrap(await supabase.rpc('set_attendance_trial', { p_student_id: studentId, p_session_id: sessionId, p_is_trial: isTrial })) as Attendance
+}
+
 export async function markAllPresent(sessionId: number, studentIds: number[]) {
   return unwrap(await supabase.rpc('mark_all_present', { p_session_id: sessionId, p_student_ids: studentIds })) as Attendance[]
 }
