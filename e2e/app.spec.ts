@@ -37,7 +37,9 @@ async function mockBackend(page: Page) {
     if (url.pathname === '/rest/v1/students') {
       const today = new Date()
       const birthday = `${today.getFullYear() - 10}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-      return json(route, adminLogin ? [{ id: 101, branch_id: 1, name: 'Birthday Student', nric: '', gender: '', date_of_birth: birthday, age: null, height: '', school: '', tshirt_size: '', student_phone: '', parent_name: '', parent_contact: '', email: '', father_height: '', mother_height: '', monthly_fee: 100, level: 'Beginner', status: 'Active', photo_path: null, created_at: new Date().toISOString() }] : [])
+      const birthdayStudent = { id: 101, branch_id: 1, name: 'Birthday Student', nric: '', gender: '', date_of_birth: birthday, age: null, height: '', school: '', tshirt_size: '', student_phone: '', parent_name: '', parent_contact: '', email: '', father_height: '', mother_height: '', monthly_fee: 100, level: 'Beginner', status: 'Active', photo_path: null, created_at: new Date().toISOString() }
+      const directoryStudents = Array.from({ length: 30 }, (_, index) => ({ ...birthdayStudent, id: 200 + index, name: `Directory Student ${String(index + 1).padStart(2, '0')}`, date_of_birth: null }))
+      return json(route, adminLogin ? [birthdayStudent, ...directoryStudents] : [])
     }
     return json(route, [])
   })
@@ -136,6 +138,24 @@ test('student profile fits the mobile visual viewport', async ({ page, isMobile 
   })
   expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight)
   expect(scroll.scrollTop).toBeGreaterThan(0)
+})
+
+test('Add student stays fixed while the mobile student directory scrolls', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile floating action behavior')
+  await login(page, true)
+  await page.getByRole('navigation', { name: 'Primary navigation' }).getByText('Students', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Students' })).toBeVisible()
+  await expect(page.locator('.page-transition')).toHaveCSS('transform', 'none')
+  await expect.poll(() => page.evaluate(() => (document.scrollingElement?.scrollHeight || 0) - (document.scrollingElement?.clientHeight || 0))).toBeGreaterThan(500)
+  await page.evaluate(() => { if (document.scrollingElement) document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight })
+  await expect.poll(() => page.evaluate(() => document.scrollingElement?.scrollTop || 0)).toBeGreaterThan(0)
+  const bounds = await page.getByRole('button', { name: 'Add student' }).evaluate((button) => {
+    const rect = button.getBoundingClientRect()
+    return { top: rect.top, bottom: rect.bottom, position: getComputedStyle(button).position, viewportHeight: visualViewport?.height || innerHeight }
+  })
+  expect(bounds.position).toBe('fixed')
+  expect(bounds.top).toBeGreaterThanOrEqual(0)
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight)
 })
 
 test('branch switching does not enlarge the mobile viewport', async ({ page, isMobile }) => {
