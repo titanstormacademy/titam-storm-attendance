@@ -1,5 +1,3 @@
-alter table public.attendance add column if not exists is_trial boolean not null default false;
-
 create or replace function public.set_attendance_status(p_student_id bigint, p_session_id bigint, p_status text)
 returns public.attendance
 language plpgsql

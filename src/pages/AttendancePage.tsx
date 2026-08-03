@@ -340,7 +340,7 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
 
       {loading ? <PageLoader label="Loading attendance…" /> : loadError ? <Alert color="red" title="Could not load attendance">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : session ? <Stack gap="md">
         <SimpleGrid cols={2} spacing="sm" className="attendance-summary-grid">
-          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{countedAttendance}</Text><Text size="xs" c="dimmed">Counted attendance</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">All present <b>{present.length}</b></Text><Text size="xs" c="orange">Trial <b>{trialCount}</b></Text></Group></Paper>
+          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{present.length}</Text><Text size="xs" c="dimmed">Total present</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">Regular <b>{countedAttendance}</b></Text><Text size="xs" c="orange">Trial <b>{trialCount}</b></Text></Group></Paper>
           <Paper className="attendance-summary-card" p="lg" radius="lg"><Text className="attendance-summary-value">{notMarked}</Text><Text size="xs" c="dimmed">Not marked</Text></Paper>
         </SimpleGrid>
 
