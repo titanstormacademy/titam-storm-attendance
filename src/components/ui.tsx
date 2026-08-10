@@ -65,7 +65,7 @@ export function PersonAvatar({ name, src, thumbnailSrc, size = 'md', onClick }: 
 }
 
 function profileThumbnailUrl(src?: string | null) {
-  if (!src) return null
+  if (!src || src.startsWith('blob:') || src.startsWith('data:')) return null
   const queryIndex = src.indexOf('?')
   const base = queryIndex === -1 ? src : src.slice(0, queryIndex)
   const query = queryIndex === -1 ? '' : src.slice(queryIndex)

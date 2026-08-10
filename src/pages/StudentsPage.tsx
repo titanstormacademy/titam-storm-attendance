@@ -58,6 +58,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
     setWithdrawalDates({})
     setAttendance([])
     setPhoto(null)
+    setPhotoPreviewUrl(null)
     setBaseline(studentSnapshot(nextForm, [], {}, {}))
     open()
     onCreateHandled()
@@ -88,6 +89,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
     setAttendance([])
     setAttendanceLoading(Boolean(student))
     setPhoto(null)
+    setPhotoPreviewUrl(null)
     setBaseline(studentSnapshot(nextForm, nextClassIds, nextDates, {}))
     open()
     if (student) {
@@ -230,7 +232,7 @@ export function StudentsPage({ branchId, data, isAdmin, createRequest, onCreateH
             <PersonAvatar name={form.name || 'New student'} src={photoUrl} size={82} onClick={() => setPhotoView({ src: photoUrl, name: form.name || 'Student photo' })} />
             {isAdmin && <FileButton onChange={setPhoto} accept="image/png,image/jpeg,image/webp">{(props) => <ActionIcon {...props} className="profile-camera-button" aria-label="Choose profile photo" color="orange" size={30} radius="xl"><IconCamera size={15} /></ActionIcon>}</FileButton>}
           </Box>
-          <Box flex={1} style={{ minWidth: 0 }}><Text fw={800} size="xl" truncate>{form.name || 'New student'}</Text><Text c="dimmed" size="sm">{displayAge != null ? `${displayAge} years old · ` : ''}{form.level || 'No level'}{form.id ? ` · ${attendance.length} attendances` : ''}</Text><Group mt="xs" gap="xs">{form.student_phone && <Button component="a" href={waUrl(form.student_phone)} target="_blank" size="xs" variant="light" color="green" leftSection={<IconMessageCircle size={15} />}>Student WhatsApp</Button>}{form.parent_contact && <Button component="a" href={waUrl(form.parent_contact)} target="_blank" size="xs" variant="light" color="green" leftSection={<IconMessageCircle size={15} />}>Parent WhatsApp</Button>}</Group>{photo && <Text size="xs" c="orange" mt={5}>New photo selected · save to upload</Text>}</Box>
+          <Box flex={1} style={{ minWidth: 0 }}><Text fw={800} size="xl" truncate>{form.name || 'New student'}</Text><Text c="dimmed" size="sm">{displayAge != null ? `${displayAge} years old · ` : ''}{form.level || 'No level'}{form.id ? ` · ${attendance.length} attendances` : ''}</Text><Group mt="xs" gap="xs">{form.student_phone && <Button component="a" href={waUrl(form.student_phone)} target="_blank" size="xs" variant="light" color="green" leftSection={<IconMessageCircle size={15} />}>Student WhatsApp</Button>}{form.parent_contact && <Button component="a" href={waUrl(form.parent_contact)} target="_blank" size="xs" variant="light" color="green" leftSection={<IconMessageCircle size={15} />}>Parent WhatsApp</Button>}</Group>{photo && <Text size="xs" c="orange" mt={5}>Photo preview · save to upload</Text>}</Box>
         </Group>
 
         <Tabs defaultValue="profile">

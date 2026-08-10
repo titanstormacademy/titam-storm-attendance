@@ -20,12 +20,12 @@ function fixtureData() {
     { id: 301, branch_id: 1, name: 'Jordan Head Coach', phone: '0123000000', coach_type: 'Head', hourly_rate: 0, status: 'Active', photo_path: null },
     { id: 302, branch_id: 1, name: 'Morgan Assistant Coach', phone: '0123111111', coach_type: 'Assistant', hourly_rate: 80, status: 'Active', photo_path: null },
   ]
-  const classes = [{ id: 401, branch_id: 1, label: 'Elite Development Training With Long Name', day_of_week: day, start_time: '09:00:00', end_time: '10:30:00', coach_id: 301, coach: { id: 301, name: 'Jordan Head Coach' } }]
+  const classes = [{ id: 401, branch_id: 1, label: 'Elite Development Training With Long Name', day_of_week: day, start_time: '09:00:00', end_time: '10:30:00', coach_id: 301, coach: { id: 301, name: 'Jordan Head Coach' } }, { id: 402, branch_id: 1, label: 'Skills Lab', day_of_week: 'Saturday', start_time: '11:00:00', end_time: '12:00:00', coach_id: 301, coach: { id: 301, name: 'Jordan Head Coach' } }]
   const sessions = [{ id: 501, branch_id: 1, class_id: 401, session_date: today, notes: 'Bring both jerseys', coach_id: 301, class: { id: 401, label: classes[0].label, start_time: '09:00:00', end_time: '10:30:00' }, coach: { id: 301, name: 'Jordan Head Coach' } }]
   const enrollments = [{ id: 601, branch_id: 1, student_id: 201, class_id: 401, start_date: `${now.getFullYear()}-01-01`, end_date: null }]
   const payments = [{ id: 701, branch_id: 1, student_id: 201, fee_month: month, amount: 150, method: 'Bank Transfer', status: 'Paid', date_received: today, remarks: 'Monthly fee', reference_no: 'UX-001', coach_id: 301, commission_settled: false, coach_payment_id: null, receipt_path: null, student: { id: 201, name: students[0].name, monthly_fee: 150 }, coach: { id: 301, name: coaches[0].name } }]
   const attendance = [{ student_id: 201, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'On time', is_trial: false }, { student_id: 202, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'First visit', is_trial: true }]
-  const reportAttendance = attendance.map((record) => { const student = students.find((item) => item.id === record.student_id)!; return { ...record, student: { id: student.id, name: student.name, status: student.status, gender: student.gender, level: student.level }, class: { id: 401, label: classes[0].label } } })
+  const reportAttendance = [...attendance.map((record) => { const student = students.find((item) => item.id === record.student_id)!; return { ...record, student: { id: student.id, name: student.name, status: student.status, gender: student.gender, level: student.level }, class: { id: 401, label: classes[0].label } } }), { ...attendance[0], session_id: 502, class_id: 402, student: { id: students[0].id, name: students[0].name, status: students[0].status, gender: students[0].gender, level: students[0].level }, class: { id: 402, label: classes[1].label } }]
   const coachAttendance = [{ id: 801, branch_id: 1, session_id: 501, class_id: 401, attendance_date: today, coach_id: 302, hours: 1.5, coach_payment_id: null }]
   return { today, month, students, coaches, classes, sessions, enrollments, payments, attendance, reportAttendance, coachAttendance }
 }
@@ -141,6 +141,22 @@ test('trial attendance is tagged and excluded from counted report sessions', asy
   await expect(trialStudent).toContainText('1')
   await trialStudent.click()
   await expect(page.getByText('Trial', { exact: true }).last()).toBeVisible()
+})
+
+test('reports can be filtered by student name', async ({ page, isMobile }) => {
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Reports', 'Reports')
+  await expect(page.getByRole('button', { name: /Avery Basketball Student/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Blake Trial/ })).toBeVisible()
+  await page.getByLabel('Search report students').fill('blake')
+  await expect(page.getByRole('button', { name: /Blake Trial/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Avery Basketball Student/ })).toHaveCount(0)
+  await expect(page.getByText('1 of 2 students')).toBeVisible()
+  await page.getByLabel('Search report students').fill('')
+  await page.getByLabel('Filter report students by class').click()
+  await page.getByRole('option', { name: 'Skills Lab' }).click()
+  await expect(page.getByRole('button', { name: /Avery Basketball Student/ }).locator('.report-total')).toHaveText('1')
+  await expect(page.getByRole('button', { name: /Blake Trial/ })).toHaveCount(0)
 })
 
 test('bootstrap failures show a retry action instead of an endless skeleton', async ({ page }) => {

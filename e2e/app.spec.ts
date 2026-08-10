@@ -106,6 +106,38 @@ test('browser Back returns through top-level app navigation', async ({ page, isM
   await expect(page.getByRole('heading', { name: 'Attendance' })).toBeVisible()
 })
 
+test('browser Back restores the previous page scroll position', async ({ page, isMobile }) => {
+  await login(page, true)
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await expect.poll(() => page.evaluate(() => (document.scrollingElement?.scrollHeight || 0) - (document.scrollingElement?.clientHeight || 0))).toBeGreaterThan(500)
+  const previousScroll = await page.evaluate(() => {
+    window.scrollTo(0, 600)
+    return window.scrollY
+  })
+  expect(previousScroll).toBeGreaterThan(300)
+  await navigation.getByText('Attendance', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Attendance' })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('heading', { name: 'Students' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(previousScroll - 100)
+})
+
+test('browser Back restores the previous branch and its scroll position', async ({ page }) => {
+  await login(page, true)
+  await page.getByRole('navigation', { name: 'Full navigation' }).getByText('Students', { exact: true }).click()
+  await expect.poll(() => page.evaluate(() => (document.scrollingElement?.scrollHeight || 0) - (document.scrollingElement?.clientHeight || 0))).toBeGreaterThan(500)
+  await page.evaluate(() => window.scrollTo(0, 600))
+  const branch = page.getByRole('textbox', { name: 'Active branch' })
+  await branch.click()
+  await page.getByRole('option', { name: 'Second Branch' }).click()
+  await expect(branch).toHaveValue('Second Branch')
+  await page.goBack()
+  await expect(page.getByRole('heading', { name: 'Students' })).toBeVisible()
+  await expect(branch).toHaveValue('Main Branch')
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500)
+})
+
 test('basic users can open a read-only student profile from the card', async ({ page, isMobile }) => {
   await login(page)
   const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
@@ -202,6 +234,22 @@ test('student editor supports manual age or automatic DOB age', async ({ page, i
   await page.getByLabel('Date of birth', { exact: true }).fill('2015-08-01')
   await expect(page.getByText(/Calculated age:/)).toBeVisible()
   await expect(page.getByLabel('Age', { exact: true })).toBeHidden()
+})
+
+test('selected student photo is previewed before saving', async ({ page, isMobile }) => {
+  await login(page, true)
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: 'Add student' }).click()
+  const fileChooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Choose profile photo' }).click()
+  await (await fileChooser).setFiles({
+    name: 'student-preview.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  })
+  await expect(page.getByText('Photo preview · save to upload')).toBeVisible()
+  await expect.poll(() => page.locator('.profile-photo-editor img').getAttribute('src')).toMatch(/^blob:/)
 })
 
 test('dirty student form cannot close until discard is confirmed', async ({ page, isMobile }) => {

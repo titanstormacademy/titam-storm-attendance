@@ -48,6 +48,7 @@ export default function App() {
   const [page, setPage] = useState<PageKey>(() => pageFromHistory())
   const pageRef = useRef(page)
   const locationRef = useRef(currentUrl())
+  const scrollRestoreRef = useRef<(() => void) | null>(null)
   const [studentCreateRequest, setStudentCreateRequest] = useState(0)
   const [navbarOpened, navbar] = useDisclosure(false)
   const [branchId, setBranchId] = useState<number | null>(() => {
@@ -58,8 +59,8 @@ export default function App() {
 
   const branchesQuery = useQuery({ queryKey: ['branches', user?.id], queryFn: getBranches, enabled: Boolean(user && profile) })
   const settingsQuery = useQuery({ queryKey: ['academy-settings'], queryFn: getAcademySettings, enabled: Boolean(user && profile) })
-  const branches = branchesQuery.data || []
-  const activeBranches = branches.filter((branch) => branch.status === 'Active')
+  const branches = useMemo(() => branchesQuery.data || [], [branchesQuery.data])
+  const activeBranches = useMemo(() => branches.filter((branch) => branch.status === 'Active'), [branches])
 
   useEffect(() => {
     if (!activeBranches.length) return
@@ -81,27 +82,48 @@ export default function App() {
   }, [colorScheme])
 
   useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
     window.history.replaceState({ ...window.history.state, titanPage: pageRef.current }, '', window.location.href)
+    return () => { window.history.scrollRestoration = previousScrollRestoration }
   }, [])
+
+  useEffect(() => {
+    if (!branchId) return
+    window.history.replaceState({ ...window.history.state, titanBranchId: branchId }, '', window.location.href)
+  }, [branchId])
 
   useEffect(() => {
     const handleLocationChange = (event: Event) => { locationRef.current = (event as CustomEvent<string>).detail }
     const handlePopState = () => {
       const previousUrl = locationRef.current
       const nextPage = pageFromHistory()
+      const storedBranchId = historyBranchId()
+      const nextBranchId = storedBranchId && activeBranches.some((branch) => branch.id === storedBranchId) ? storedBranchId : branchId
+      const pageChanged = nextPage !== pageRef.current
+      const branchChanged = nextBranchId != null && nextBranchId !== branchId
       if (navbarOpened && !window.history.state?.mobileNav) navbar.close()
-      if (nextPage === pageRef.current) {
+      if (!pageChanged && !branchChanged) {
         locationRef.current = currentUrl()
+        const scrollY = historyScrollPosition()
+        if (scrollY != null) startScrollRestoration(scrollY)
         return
       }
       if (!confirmLeave()) {
-        window.history.pushState({ titanPage: pageRef.current, guardRestored: true }, '', previousUrl)
+        window.history.pushState({ titanPage: pageRef.current, titanBranchId: branchId, titanScrollY: branchId ? storedScrollPosition(pageRef.current, branchId) : window.scrollY, guardRestored: true }, '', previousUrl)
         locationRef.current = previousUrl
         return
       }
+      stopScrollRestoration()
       locationRef.current = currentUrl()
-      pageRef.current = nextPage
-      setPage(nextPage)
+      if (branchChanged) {
+        setBranchId(nextBranchId)
+        localStorage.setItem('titan-storm-branch', String(nextBranchId))
+      }
+      if (pageChanged) {
+        pageRef.current = nextPage
+        setPage(nextPage)
+      }
       navbar.close()
     }
     window.addEventListener('titan-location-change', handleLocationChange)
@@ -110,20 +132,45 @@ export default function App() {
       window.removeEventListener('titan-location-change', handleLocationChange)
       window.removeEventListener('popstate', handlePopState)
     }
-  }, [confirmLeave, navbar, navbarOpened])
+  }, [activeBranches, branchId, confirmLeave, navbar, navbarOpened])
 
   useEffect(() => {
     if (isAdmin || !navigation.find((item) => item.key === page)?.admin) return
+    if (branchId) rememberScrollPosition(page, branchId)
     pageRef.current = 'dashboard'
     setPage('dashboard')
-    window.history.replaceState({ titanPage: 'dashboard' }, '', pageUrl('dashboard'))
-  }, [isAdmin, page])
+    window.history.replaceState({ titanPage: 'dashboard', titanBranchId: branchId, titanScrollY: branchId ? storedScrollPosition('dashboard', branchId) : 0 }, '', pageUrl('dashboard'))
+  }, [branchId, isAdmin, page])
 
   const dataQuery = useQuery({
     queryKey: ['bootstrap', branchId, isAdmin],
     queryFn: () => getBootstrapData(branchId!, Boolean(isAdmin)),
     enabled: Boolean(user && profile && branchId),
   })
+
+  useEffect(() => {
+    if (!user || !profile || !branchId || !dataQuery.data) return
+    const scrollY = historyBranchId() === branchId ? historyScrollPosition() ?? storedScrollPosition(page, branchId) : storedScrollPosition(page, branchId)
+    startScrollRestoration(scrollY)
+    return stopScrollRestoration
+  }, [branchId, dataQuery.data, page, profile, user])
+
+  useEffect(() => {
+    if (!user || !profile || !branchId) return
+    let frame = 0
+    const handleScroll = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        rememberScrollPosition(pageRef.current, branchId)
+      })
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [branchId, profile, user])
 
   const visibleNavigation = useMemo(() => navigation.filter((item) => !item.admin || isAdmin), [isAdmin])
   const activeBranch = branches.find((branch) => branch.id === branchId)
@@ -139,12 +186,24 @@ export default function App() {
     if (result.error) throw result.error
   }
 
+  function stopScrollRestoration() {
+    scrollRestoreRef.current?.()
+    scrollRestoreRef.current = null
+  }
+
+  function startScrollRestoration(scrollY: number) {
+    stopScrollRestoration()
+    scrollRestoreRef.current = restoreScrollPosition(scrollY)
+  }
+
   function navigate(nextPage: PageKey) {
     if (nextPage === page || !confirmLeave()) return
+    if (branchId) rememberScrollPosition(page, branchId)
+    stopScrollRestoration()
     if (window.history.state?.mobileNav) window.history.replaceState({ ...window.history.state, mobileNav: false }, '', pageUrl(page))
     pageRef.current = nextPage
     setPage(nextPage)
-    window.history.pushState({ titanPage: nextPage }, '', pageUrl(nextPage))
+    window.history.pushState({ titanPage: nextPage, titanBranchId: branchId, titanScrollY: branchId ? storedScrollPosition(nextPage, branchId) : 0 }, '', pageUrl(nextPage))
     locationRef.current = currentUrl()
     navbar.close()
   }
@@ -160,11 +219,14 @@ export default function App() {
   function changeBranch(value: string | null) {
     if (!value || !confirmLeave()) return
     const nextPage: PageKey = 'dashboard'
-    setBranchId(Number(value))
+    const nextBranchId = Number(value)
+    if (branchId) rememberScrollPosition(page, branchId)
+    stopScrollRestoration()
+    setBranchId(nextBranchId)
     localStorage.setItem('titan-storm-branch', value)
     pageRef.current = nextPage
     setPage(nextPage)
-    window.history.pushState({ titanPage: nextPage }, '', pageUrl(nextPage))
+    window.history.pushState({ titanPage: nextPage, titanBranchId: nextBranchId, titanScrollY: storedScrollPosition(nextPage, nextBranchId) }, '', pageUrl(nextPage))
     locationRef.current = currentUrl()
   }
 
@@ -189,10 +251,12 @@ export default function App() {
 
   function registerStudentFromAttendance() {
     if (!confirmLeave()) return
+    if (branchId) rememberScrollPosition(page, branchId)
+    stopScrollRestoration()
     setStudentCreateRequest((current) => current + 1)
     pageRef.current = 'students'
     setPage('students')
-    window.history.pushState({ titanPage: 'students' }, '', pageUrl('students'))
+    window.history.pushState({ titanPage: 'students', titanBranchId: branchId, titanScrollY: branchId ? storedScrollPosition('students', branchId) : 0 }, '', pageUrl('students'))
     locationRef.current = currentUrl()
     navbar.close()
   }
@@ -320,4 +384,54 @@ function pageUrl(page: PageKey) {
   url.searchParams.delete('attendanceClass')
   url.searchParams.delete('attendanceMode')
   return `${url.pathname}${url.search}${url.hash}`
+}
+
+function scrollStorageKey(page: PageKey, branchId: number) {
+  return `titan-scroll-${branchId}-${page}`
+}
+
+function storedScrollPosition(page: PageKey, branchId: number) {
+  const value = Number(sessionStorage.getItem(scrollStorageKey(page, branchId)))
+  return Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function historyBranchId() {
+  const value = window.history.state?.titanBranchId
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function historyScrollPosition() {
+  const value = window.history.state?.titanScrollY
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function rememberScrollPosition(page: PageKey, branchId: number) {
+  const scrollY = Math.max(0, window.scrollY)
+  sessionStorage.setItem(scrollStorageKey(page, branchId), String(scrollY))
+  window.history.replaceState({ ...window.history.state, titanPage: page, titanBranchId: branchId, titanScrollY: scrollY }, '', window.location.href)
+}
+
+function restoreScrollPosition(scrollY: number) {
+  const target = Math.max(0, scrollY)
+  let frame = 0
+  let timeout = 0
+  const observer = new ResizeObserver(() => restore())
+  const stop = () => {
+    observer.disconnect()
+    if (frame) window.cancelAnimationFrame(frame)
+    if (timeout) window.clearTimeout(timeout)
+  }
+  const restore = () => {
+    if (frame) return
+    frame = window.requestAnimationFrame(() => {
+      frame = 0
+      const maximum = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+      window.scrollTo({ top: Math.min(target, maximum), left: 0, behavior: 'auto' })
+      if (maximum >= target) stop()
+    })
+  }
+  observer.observe(document.documentElement)
+  timeout = window.setTimeout(stop, 5000)
+  restore()
+  return stop
 }
