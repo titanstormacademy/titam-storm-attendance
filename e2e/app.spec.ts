@@ -216,6 +216,19 @@ test('administrators can open an editable student profile from the card', async 
   await expect(page.getByRole('button', { name: 'Save student' })).toBeVisible()
 })
 
+test('student detail dropdowns work in mobile portrait mode', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile portrait dropdown behavior')
+  await login(page, true)
+  await page.getByRole('navigation', { name: 'Primary navigation' }).getByText('Students', { exact: true }).click()
+  await page.getByRole('button', { name: 'Add student' }).click()
+  await page.getByRole('textbox', { name: 'Gender' }).click()
+  await page.getByRole('option', { name: 'Female' }).click()
+  await expect(page.getByRole('textbox', { name: 'Gender' })).toHaveValue('Female')
+  await page.getByRole('textbox', { name: 'Level', exact: true }).click()
+  await page.getByRole('option', { name: 'Intermediate' }).click()
+  await expect(page.getByRole('textbox', { name: 'Level', exact: true })).toHaveValue('Intermediate')
+})
+
 test('Overview shows a student whose birthday is today', async ({ page }) => {
   await login(page, true)
   await expect(page.getByRole('heading', { name: 'Birthday babies' })).toBeVisible()

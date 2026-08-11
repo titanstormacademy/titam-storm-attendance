@@ -10,6 +10,9 @@ function jwt() {
 function fixtureData() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const comparisonMonth = (now.getMonth() + 6) % 12
+  const comparisonMonthDate = `${now.getFullYear()}-${String(comparisonMonth + 1).padStart(2, '0')}-15`
+  const gapMonthDate = `${now.getFullYear()}-${String(Math.min(now.getMonth(), comparisonMonth) + 2).padStart(2, '0')}-15`
   const month = `${today.slice(0, 7)}-01`
   const day = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now)
   const students = [
@@ -25,7 +28,7 @@ function fixtureData() {
   const enrollments = [{ id: 601, branch_id: 1, student_id: 201, class_id: 401, start_date: `${now.getFullYear()}-01-01`, end_date: null }]
   const payments = [{ id: 701, branch_id: 1, student_id: 201, fee_month: month, amount: 150, method: 'Bank Transfer', status: 'Paid', date_received: today, remarks: 'Monthly fee', reference_no: 'UX-001', coach_id: 301, commission_settled: false, coach_payment_id: null, receipt_path: null, student: { id: 201, name: students[0].name, monthly_fee: 150 }, coach: { id: 301, name: coaches[0].name } }]
   const attendance = [{ student_id: 201, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'On time', is_trial: false }, { student_id: 202, session_id: 501, class_id: 401, branch_id: 1, attendance_date: today, status: 'Present', remarks: 'First visit', is_trial: true }]
-  const reportAttendance = [...attendance.map((record) => { const student = students.find((item) => item.id === record.student_id)!; return { ...record, student: { id: student.id, name: student.name, status: student.status, gender: student.gender, level: student.level }, class: { id: 401, label: classes[0].label } } }), { ...attendance[0], session_id: 502, class_id: 402, student: { id: students[0].id, name: students[0].name, status: students[0].status, gender: students[0].gender, level: students[0].level }, class: { id: 402, label: classes[1].label } }]
+  const reportAttendance = [...attendance.map((record) => { const student = students.find((item) => item.id === record.student_id)!; return { ...record, student: { id: student.id, name: student.name, status: student.status, gender: student.gender, level: student.level }, class: { id: 401, label: classes[0].label } } }), { ...attendance[0], session_id: 502, class_id: 402, student: { id: students[0].id, name: students[0].name, status: students[0].status, gender: students[0].gender, level: students[0].level }, class: { id: 402, label: classes[1].label } }, { ...attendance[0], session_id: 503, attendance_date: comparisonMonthDate, student: { id: students[0].id, name: students[0].name, status: students[0].status, gender: students[0].gender, level: students[0].level }, class: { id: 401, label: classes[0].label } }, { ...attendance[0], session_id: 504, attendance_date: gapMonthDate, student: { id: students[0].id, name: students[0].name, status: students[0].status, gender: students[0].gender, level: students[0].level }, class: { id: 401, label: classes[0].label } }]
   const coachAttendance = [{ id: 801, branch_id: 1, session_id: 501, class_id: 401, attendance_date: today, coach_id: 302, hours: 1.5, coach_payment_id: null }]
   return { today, month, students, coaches, classes, sessions, enrollments, payments, attendance, reportAttendance, coachAttendance }
 }
@@ -157,6 +160,19 @@ test('reports can be filtered by student name', async ({ page, isMobile }) => {
   await page.getByRole('option', { name: 'Skills Lab' }).click()
   await expect(page.getByRole('button', { name: /Avery Basketball Student/ }).locator('.report-total')).toHaveText('1')
   await expect(page.getByRole('button', { name: /Blake Trial/ })).toHaveCount(0)
+})
+
+test('reports combine attendance from multiple selected months', async ({ page, isMobile }) => {
+  const now = new Date()
+  const comparisonMonth = (now.getMonth() + 6) % 12
+  const comparisonMonthLabel = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(now.getFullYear(), comparisonMonth, 1))
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Reports', 'Reports')
+  const student = page.getByRole('button', { name: /Avery Basketball Student/ })
+  await expect(student.locator('.report-total')).toHaveText('2')
+  await page.getByLabel('Filter report by months').click()
+  await page.getByRole('option', { name: comparisonMonthLabel, exact: true }).click()
+  await expect(student.locator('.report-total')).toHaveText('3')
 })
 
 test('bootstrap failures show a retry action instead of an endless skeleton', async ({ page }) => {

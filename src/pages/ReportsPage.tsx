@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { Alert, Badge, Box, Button, Grid, Group, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput } from '@mantine/core'
+import { Alert, Badge, Box, Button, Grid, Group, MultiSelect, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconCheck, IconChevronDown, IconClipboard, IconSearch } from '@tabler/icons-react'
 import { getAttendanceReport } from '../lib/api'
@@ -21,11 +21,12 @@ type ReportRow = {
 }
 
 const classColors = ['#ef3340', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b']
-const monthOptions = [{ value: 'All', label: 'All months' }, ...Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1).padStart(2, '0'), label: dayjs(`2026-${String(index + 1).padStart(2, '0')}-01`).format('MMMM') }))]
+const calendarMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'))
+const monthOptions = [{ value: 'All', label: 'All months' }, ...calendarMonths.map((month) => ({ value: month, label: dayjs(`2026-${month}-01`).format('MMMM') }))]
 
 export function ReportsPage({ branchId, data }: { branchId: number; data: BootstrapData }) {
   const [year, setYear] = useState(dayjs().format('YYYY'))
-  const [month, setMonth] = useState(dayjs().format('MM'))
+  const [months, setMonths] = useState([dayjs().format('MM')])
   const [view, setView] = useState<'summary' | 'grid'>('summary')
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState<string | null>('All')
@@ -36,10 +37,14 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
   const [reloadRequest, setReloadRequest] = useState(0)
 
   const period = useMemo(() => {
-    const start = month === 'All' ? dayjs(`${year}-01-01`) : dayjs(`${year}-${month}-01`)
-    const end = month === 'All' ? start.endOf('year') : start.endOf('month')
-    return { start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD'), label: month === 'All' ? year : start.format('MMMM YYYY') }
-  }, [month, year])
+    const selectedMonths = months.includes('All') ? calendarMonths : [...months].sort()
+    const ranges = selectedMonths.map((month) => {
+      const start = dayjs(`${year}-${month}-01`)
+      return { start: start.format('YYYY-MM-DD'), end: start.endOf('month').format('YYYY-MM-DD') }
+    })
+    const label = months.includes('All') ? year : `${selectedMonths.map((month) => dayjs(`${year}-${month}-01`).format('MMMM')).join(', ')} ${year}`
+    return { start: ranges[0].start, end: ranges.at(-1)!.end, label, months: selectedMonths, ranges }
+  }, [months, year])
 
   useEffect(() => {
     let active = true
@@ -55,12 +60,12 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
   }, [branchId, period.end, period.start, reloadRequest])
 
   const selectedClassId = classFilter === 'All' ? null : Number(classFilter)
-  const reportRecords = useMemo(() => records.filter((record) => selectedClassId == null || record.class_id === selectedClassId), [records, selectedClassId])
+  const reportRecords = useMemo(() => records.filter((record) => period.months.includes(record.attendance_date.slice(5, 7)) && (selectedClassId == null || record.class_id === selectedClassId)), [period.months, records, selectedClassId])
 
   const rows = useMemo(() => {
     const byStudent = new Map<number, ReportRow>()
-    data.students.filter((student) => student.status === 'Active' && data.enrollments.some((entry) => entry.student_id === student.id && (selectedClassId == null || entry.class_id === selectedClassId) && entry.start_date <= period.end && (!entry.end_date || entry.end_date >= period.start))).forEach((student) => {
-      const enrolledClasses = [...new Map(data.enrollments.filter((entry) => entry.student_id === student.id && (selectedClassId == null || entry.class_id === selectedClassId) && entry.start_date <= period.end && (!entry.end_date || entry.end_date >= period.start)).map((entry) => data.classes.find((item) => item.id === entry.class_id)).filter((item): item is AcademyClass => Boolean(item)).map((item) => [item.id, { id: item.id, label: item.label }])).values()]
+    data.students.filter((student) => student.status === 'Active' && data.enrollments.some((entry) => entry.student_id === student.id && (selectedClassId == null || entry.class_id === selectedClassId) && period.ranges.some((range) => entry.start_date <= range.end && (!entry.end_date || entry.end_date >= range.start)))).forEach((student) => {
+      const enrolledClasses = [...new Map(data.enrollments.filter((entry) => entry.student_id === student.id && (selectedClassId == null || entry.class_id === selectedClassId) && period.ranges.some((range) => entry.start_date <= range.end && (!entry.end_date || entry.end_date >= range.start))).map((entry) => data.classes.find((item) => item.id === entry.class_id)).filter((item): item is AcademyClass => Boolean(item)).map((item) => [item.id, { id: item.id, label: item.label }])).values()]
       byStudent.set(student.id, { id: student.id, name: student.name, level: student.level, age: student.date_of_birth ? dayjs().diff(dayjs(student.date_of_birth), 'year') : null, total: 0, trialCount: 0, enrolledClasses, classes: new Map(), dates: new Map() })
     })
     reportRecords.forEach((record) => {
@@ -79,17 +84,23 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
       byStudent.set(record.student_id, row)
     })
     return [...byStudent.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
-  }, [data.classes, data.enrollments, data.students, period.end, period.start, reportRecords, selectedClassId])
+  }, [data.classes, data.enrollments, data.students, period.ranges, reportRecords, selectedClassId])
 
   const filteredRows = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return rows.filter((row) => !needle || row.name.toLowerCase().includes(needle))
   }, [rows, search])
 
-  const dates = useMemo(() => [...new Set([...data.sessions.filter((item) => (selectedClassId == null || item.class_id === selectedClassId) && item.session_date >= period.start && item.session_date <= period.end).map((item) => item.session_date), ...reportRecords.map((item) => item.attendance_date)])].sort(), [data.sessions, period.end, period.start, reportRecords, selectedClassId])
+  const dates = useMemo(() => [...new Set([...data.sessions.filter((item) => period.months.includes(item.session_date.slice(5, 7)) && item.session_date.startsWith(year) && (selectedClassId == null || item.class_id === selectedClassId)).map((item) => item.session_date), ...reportRecords.map((item) => item.attendance_date)])].sort(), [data.sessions, period.months, reportRecords, selectedClassId, year])
   const classesInReport = useMemo(() => [...new Map(reportRecords.map((record) => [record.class_id, record.class.label])).entries()], [reportRecords])
   const colorFor = (classId: number) => classColors[Math.abs(classId) % classColors.length]
   const years = Array.from({ length: 8 }, (_, index) => String(dayjs().year() - index))
+
+  function changeMonths(values: string[]) {
+    if (!values.length) return
+    if (values.includes('All') && !months.includes('All')) setMonths(['All'])
+    else setMonths(values.filter((value) => value !== 'All'))
+  }
 
   function toggleRow(studentId: number) {
     setExpandedRows((current) => {
@@ -115,8 +126,8 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
 
   return <>
     <PageHeader title="Reports" description="Student attendance overview" action={<Button variant="light" leftSection={<IconClipboard size={17} />} onClick={copyReport} disabled={loading || Boolean(loadError) || filteredRows.length === 0}>Copy</Button>} />
-    <SegmentedControl value={view} onChange={(value) => { const nextView = value as 'summary' | 'grid'; setView(nextView); if (nextView === 'grid' && month === 'All') setMonth(dayjs().format('MM')) }} data={[{ value: 'summary', label: 'Summary' }, { value: 'grid', label: 'Grid' }]} mb="md" />
-    <Paper p="md" radius="lg" withBorder mb="md"><Grid gutter="sm" align="flex-end"><Grid.Col span={{ base: 12, md: 6 }}><TextInput label="Student" aria-label="Search report students" leftSection={<IconSearch size={17} />} placeholder="Search by student name…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6, md: 2 }}><Select label="Class" aria-label="Filter report students by class" value={classFilter} onChange={setClassFilter} data={[{ value: 'All', label: 'All classes' }, ...data.classes.map((item) => ({ value: String(item.id), label: item.label }))]} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><Select label="Year" value={year} onChange={(value) => setYear(value || dayjs().format('YYYY'))} data={years} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><Select label="Month" value={month} onChange={(value) => setMonth(value || 'All')} data={monthOptions} allowDeselect={false} /></Grid.Col></Grid></Paper>
+    <SegmentedControl value={view} onChange={(value) => { const nextView = value as 'summary' | 'grid'; setView(nextView); if (nextView === 'grid' && months.includes('All')) setMonths([dayjs().format('MM')]) }} data={[{ value: 'summary', label: 'Summary' }, { value: 'grid', label: 'Grid' }]} mb="md" />
+    <Paper p="md" radius="lg" withBorder mb="md"><Grid gutter="sm" align="flex-end"><Grid.Col span={{ base: 12, md: 6 }}><TextInput label="Student" aria-label="Search report students" leftSection={<IconSearch size={17} />} placeholder="Search by student name…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6, md: 2 }}><Select label="Class" aria-label="Filter report students by class" value={classFilter} onChange={setClassFilter} data={[{ value: 'All', label: 'All classes' }, ...data.classes.map((item) => ({ value: String(item.id), label: item.label }))]} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><Select label="Year" value={year} onChange={(value) => setYear(value || dayjs().format('YYYY'))} data={years} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><MultiSelect label="Months" aria-label="Filter report by months" value={months} onChange={changeMonths} data={monthOptions} hidePickedOptions searchable /></Grid.Col></Grid></Paper>
     {!loading && !loadError && rows.length > 0 && <Text size="xs" c="dimmed" mb="xs" px={4}>{filteredRows.length === rows.length ? `${rows.length} students` : `${filteredRows.length} of ${rows.length} students`}</Text>}
 
     {loading ? <PageLoader label="Loading report…" /> : loadError ? <Alert color="red" title="Could not load report">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : rows.length === 0 ? <Paper p="xl" radius="lg" withBorder><Text c="dimmed" ta="center">No attendance records for {period.label}.</Text></Paper> : filteredRows.length === 0 ? <Paper p="xl" radius="lg" withBorder><Text c="dimmed" ta="center">No students match the current report filters.</Text></Paper> : view === 'summary' ? <Stack gap="sm">{filteredRows.map((row) => {
