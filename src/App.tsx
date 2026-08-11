@@ -356,7 +356,7 @@ function renderPage(page: PageKey, props: PageProps) {
     case 'coaches': return <CoachesPage branchId={props.branchId} data={props.data} onChanged={props.onChanged} />
     case 'reports': return <ReportsPage branchId={props.branchId} data={props.data} />
     case 'settings': return <SettingsPage branches={props.branches} settings={props.settings} onChanged={props.refreshAll} />
-    default: return <DashboardPage data={props.data} branchName={props.branchName} isAdmin={props.isAdmin} onAttendance={() => props.navigate('attendance')} />
+    default: return <DashboardPage data={props.data} branchName={props.branchName} isAdmin={props.isAdmin} />
   }
 }
 

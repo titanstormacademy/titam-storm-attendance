@@ -342,23 +342,33 @@ select {
   color: #141b2b;
 }
 
-.dashboard-stats .stat-card {
+.monthly-pulse-panel {
   position: relative;
-  min-width: 0;
-  animation: card-enter 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
+  overflow: hidden;
 }
 
-.dashboard-stats .stat-card:nth-child(2) { animation-delay: 70ms; }
-.dashboard-stats .stat-card:nth-child(3) { animation-delay: 140ms; }
-.dashboard-stats .stat-card:nth-child(4) { animation-delay: 210ms; }
-
-.dashboard-stats .stat-card > .mantine-Group-root {
-  min-width: 0;
-  flex-wrap: nowrap;
+.monthly-pulse-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 150px;
+  border-radius: 0 0 0 100%;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.12));
+  pointer-events: none;
 }
 
-.dashboard-stats .stat-card > .mantine-Group-root > .mantine-Box-root {
+.fee-collection-matrix {
+  position: relative;
+}
+
+.fee-collection-cell {
   min-width: 0;
+  padding: 12px 6px;
+  border: 1px solid #e8ebf0;
+  border-radius: 12px;
+  background: #f8fafc;
 }
 
 .text-button {
@@ -1158,47 +1168,6 @@ select {
     bottom: calc(92px + env(safe-area-inset-bottom));
   }
 
-  .dashboard-stats .stat-card {
-    min-height: 126px;
-    padding: 14px !important;
-  }
-
-  .dashboard-stats .stat-card > .mantine-Group-root {
-    display: block;
-  }
-
-  .dashboard-stats .stat-card .mantine-ThemeIcon-root {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
-  }
-
-  .dashboard-stats .stat-card > .mantine-Group-root > .mantine-Box-root {
-    padding-right: 34px;
-  }
-
-  .dashboard-stats .stat-card .mantine-Text-root:first-child {
-    min-height: 34px;
-    font-size: 0.78rem;
-    line-height: 1.25;
-  }
-
-  .dashboard-stats .stat-card .stat-value {
-    min-height: 0;
-    padding-right: 0;
-    font-size: 1.55rem;
-    line-height: 1.15;
-  }
-
-  .dashboard-stats .stat-card .mantine-Text-root:last-child {
-    min-height: 0;
-    font-size: 0.7rem;
-    line-height: 1.25;
-  }
-
   .app-main .mantine-Paper-root,
   .mantine-Modal-body {
     padding: var(--mantine-spacing-md) !important;
@@ -1408,6 +1377,11 @@ select {
   color: #e7edf7;
   background: #131d2e;
   border-color: #2b3950;
+}
+
+[data-mantine-color-scheme='dark'] .fee-collection-cell {
+  background: #182438;
+  border-color: #34445e;
 }
 
 [data-mantine-color-scheme='dark'] .student-directory-card:hover,

@@ -122,6 +122,19 @@ const screens = [
   { label: 'Settings', heading: 'Settings' },
 ]
 
+test('overview prioritizes monthly pulse, birthdays, and fee collection status', async ({ page }) => {
+  await loginAdmin(page)
+  await expect(page.getByRole('heading', { name: 'Monthly pulse' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Birthday babies' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Today’s schedule' })).toHaveCount(0)
+  await expect(page.getByText('Active students', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.fee-collection-cell').filter({ has: page.getByText('Total students', { exact: true }) })).toContainText('1')
+  await expect(page.locator('.fee-collection-cell').filter({ has: page.getByText('Paid', { exact: true }) })).toContainText('1')
+  await expect(page.locator('.fee-collection-cell').filter({ has: page.getByText('Unpaid', { exact: true }) })).toContainText('0')
+  const iconColors = await page.locator('.monthly-pulse-panel .mantine-ThemeIcon-root').evaluateAll((icons) => [...new Set(icons.map((icon) => getComputedStyle(icon).color))])
+  expect(iconColors.length).toBeGreaterThanOrEqual(3)
+})
+
 test('trial attendance is tagged and excluded from counted report sessions', async ({ page, isMobile }) => {
   await loginAdmin(page)
   await navigate(page, Boolean(isMobile), 'Attendance', 'Attendance')
