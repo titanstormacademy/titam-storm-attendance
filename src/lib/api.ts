@@ -287,7 +287,7 @@ export async function getAttendanceReport(branchId: number, startDate: string, e
 
 export async function uploadImage(bucket: string, branchId: number, file: File, entityId?: number) {
   const profilePhoto = bucket === 'student-photos' || bucket === 'coach-photos'
-  const prepared = await optimizeImage(file, bucket === 'payment-receipts' ? 2000 : 1600)
+  const prepared = bucket === 'payment-receipts' ? await optimizeImage(file, 1600, 0.75, true, 400_000) : await optimizeImage(file, 1600)
   const extension = prepared.type === 'image/webp' ? 'webp' : file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${branchId}/${entityId || 'new'}/${crypto.randomUUID()}.${extension}`
   const result = await supabase.storage.from(bucket).upload(path, prepared, { upsert: false, contentType: prepared.type, cacheControl: '31536000' })
@@ -317,11 +317,12 @@ export async function removeReceiptIfUnreferenced(path: string) {
   if (!count) await removeUploadedImage('payment-receipts', path)
 }
 
-async function optimizeImage(file: File, maxDimension: number) {
+async function optimizeImage(file: File, maxDimension: number, quality = 0.84, alwaysOptimize = false, maxBytes?: number) {
   if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') return file
+  if (alwaysOptimize && file.size > 15_000_000) throw new Error('Receipt image must be 15 MB or smaller')
   const image = await createImageBitmap(file)
   const scale = Math.min(1, maxDimension / Math.max(image.width, image.height))
-  if (scale === 1 && file.size <= 1_500_000) {
+  if (!alwaysOptimize && scale === 1 && file.size <= 1_500_000) {
     image.close()
     return file
   }
@@ -330,7 +331,21 @@ async function optimizeImage(file: File, maxDimension: number) {
   canvas.height = Math.max(1, Math.round(image.height * scale))
   canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
   image.close()
-  return canvasFile(canvas, file.name, 0.84)
+  const optimized = await compressedCanvasFile(canvas, file.name, quality, maxBytes)
+  return alwaysOptimize && file.size <= (maxBytes || Number.POSITIVE_INFINITY) && file.size < optimized.size ? file : optimized
+}
+
+async function compressedCanvasFile(canvas: HTMLCanvasElement, fileName: string, quality: number, maxBytes?: number): Promise<File> {
+  const result = await canvasFile(canvas, fileName, quality)
+  if (!maxBytes || result.size <= maxBytes) return result
+  if (quality <= 0.35 && Math.max(canvas.width, canvas.height) <= 320) throw new Error('Receipt image could not be compressed below 400 KB')
+  if (quality > 0.35) return compressedCanvasFile(canvas, fileName, Math.max(0.34, quality - 0.08), maxBytes)
+  const smaller = document.createElement('canvas')
+  const scale = Math.max(320 / Math.max(canvas.width, canvas.height), 0.82)
+  smaller.width = Math.max(1, Math.round(canvas.width * scale))
+  smaller.height = Math.max(1, Math.round(canvas.height * scale))
+  smaller.getContext('2d')?.drawImage(canvas, 0, 0, smaller.width, smaller.height)
+  return compressedCanvasFile(smaller, fileName, 0.67, maxBytes)
 }
 
 async function createThumbnail(file: File) {
@@ -353,7 +368,7 @@ async function canvasFile(canvas: HTMLCanvasElement, fileName: string, quality: 
 
 export async function scanReceipt(file: File) {
   const body = new FormData()
-  body.append('file', await optimizeImage(file, 2000))
+  body.append('file', await optimizeImage(file, 1600, 0.75, true, 400_000))
   const result = await supabase.functions.invoke('receipt-ocr', { body })
   if (result.error) throw new Error(result.error.message)
   return result.data as {

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(37);
 
 insert into auth.users (id, email) values ('00000000-0000-4000-8000-000000000001', 'admin@example.test');
 select is((select role::text from public.profiles where id = '00000000-0000-4000-8000-000000000001'), 'staff', 'new accounts always start as staff');
@@ -10,7 +10,8 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 insert into public.students (id, branch_id, name, status, monthly_fee) values
   (9001, 1, 'Temporal Student', 'Active', 150),
   (9002, 1, 'Inactive Student', 'Inactive', 150),
-  (9003, 1, 'Trial Student', 'Trial', 150);
+  (9003, 1, 'Trial Student', 'Trial', 150),
+  (9004, 1, 'Enrolled Trial Student', 'Trial', 150);
 insert into public.coaches (id, branch_id, name, coach_type, hourly_rate) values
   (9001, 1, 'Head Coach', 'Head', 0),
   (9002, 1, 'Assistant Coach', 'Assistant', 100);
@@ -77,6 +78,7 @@ select throws_ok(
   'assistant coach cannot be assigned payment commission'
 );
 
+insert into public.enrollments (branch_id, student_id, class_id, start_date) values (1, 9004, 9001, current_date);
 select lives_ok($$select public.set_attendance_remark(9001, 9001, 'Arrived early')$$, 'attendance remark can be saved independently');
 select lives_ok($$select public.set_attendance_status(9001, 9001, 'Present')$$, 'attendance status can be saved independently');
 select is((select remarks from public.attendance where student_id = 9001 and session_id = 9001), 'Arrived early', 'status update does not overwrite remarks');
@@ -84,6 +86,20 @@ select lives_ok($$select public.set_attendance_status(9003, 9001, 'Present')$$, 
 select is((select is_trial from public.attendance where student_id = 9003 and session_id = 9001), true, 'trial student attendance defaults to trial');
 select lives_ok($$select public.set_attendance_trial(9003, 9001, false)$$, 'coach can correct the trial identifier');
 select is((select is_trial from public.attendance where student_id = 9003 and session_id = 9001), false, 'corrected attendance is counted normally');
+select lives_ok($$select public.set_attendance_status(9004, 9001, 'Present')$$, 'enrolled trial student attendance can be marked present');
+select is((select is_trial from public.attendance where student_id = 9004 and session_id = 9001), false, 'enrolled trial student attendance is counted normally');
+select throws_ok(
+  $$select public.set_attendance_trial(9004, 9001, true)$$,
+  'P0001',
+  'Only walk-in attendance can be marked as trial',
+  'enrolled attendance cannot be changed to trial'
+);
+select throws_ok(
+  $$update public.attendance set is_trial = true where student_id = 9004 and session_id = 9001$$,
+  'P0001',
+  'Only walk-in attendance can be marked as trial',
+  'direct attendance updates cannot bypass the walk-in trial rule'
+);
 select throws_ok(
   $$select * from public.mark_all_present(9001, array[9002]::bigint[])$$,
   'P0001',

@@ -72,7 +72,7 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
       const student = data.students.find((item) => item.id === record.student_id)
       const row = byStudent.get(record.student_id) || { id: record.student_id, name: record.student.name, level: record.student.level, age: student?.date_of_birth ? dayjs().diff(dayjs(student.date_of_birth), 'year') : null, total: 0, trialCount: 0, enrolledClasses: [], classes: new Map(), dates: new Map() }
       const walkIn = !data.enrollments.some((entry) => entry.student_id === record.student_id && entry.class_id === record.class_id && entry.start_date <= record.attendance_date && (!entry.end_date || entry.end_date >= record.attendance_date))
-      const trial = Boolean(record.is_trial)
+      const trial = walkIn && Boolean(record.is_trial)
       const classEntry = row.classes.get(record.class_id) || { label: record.class.label, dates: [], walkIns: 0, trials: 0 }
       classEntry.dates.push({ date: record.attendance_date, trial })
       if (walkIn) classEntry.walkIns += 1

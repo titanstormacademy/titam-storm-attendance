@@ -16,7 +16,7 @@ function fixtureData() {
   const month = `${today.slice(0, 7)}-01`
   const day = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now)
   const students = [
-    { id: 201, branch_id: 1, name: 'Avery Basketball Student With A Long Name', nric: 'S001', gender: 'Female', date_of_birth: `${now.getFullYear() - 12}-08-02`, age: null, height: '155', school: 'Titan International School', tshirt_size: 'M', student_phone: '0123456789', parent_name: 'Taylor Parent', parent_contact: '0198765432', email: 'avery@example.test', father_height: '180', mother_height: '165', monthly_fee: 150, level: 'Intermediate', status: 'Active', photo_path: null, created_at: now.toISOString() },
+    { id: 201, branch_id: 1, name: 'Avery Basketball Student With A Long Name', nric: 'S001', gender: 'Female', date_of_birth: `${now.getFullYear() - 12}-08-02`, age: null, height: '155', school: 'Titan International School', tshirt_size: 'M', student_phone: '0123456789', parent_name: 'Taylor Parent', parent_contact: '0198765432', email: 'avery@example.test', father_height: '180', mother_height: '165', monthly_fee: 150, level: 'Intermediate', status: 'Active', photo_path: 'fixtures/avery.jpg', created_at: now.toISOString() },
     { id: 202, branch_id: 1, name: 'Blake Trial', nric: '', gender: 'Male', date_of_birth: null, age: 9, height: '', school: '', tshirt_size: '', student_phone: '', parent_name: '', parent_contact: '', email: '', father_height: '', mother_height: '', monthly_fee: 120, level: 'Beginner', status: 'Trial', photo_path: null, created_at: now.toISOString() },
   ]
   const coaches = [
@@ -43,6 +43,7 @@ async function mockAdminBackend(page: Page, options: { failBootstrap?: boolean; 
   await page.route('http://127.0.0.1:54321/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
+    if (url.pathname.includes('/storage/v1/object/public/student-photos/')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="#f26522"/></svg>' })
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' } })
     if (url.pathname === '/auth/v1/signup') return respond(route, { access_token: jwt(), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'ux-refresh', user: { id: userId, aud: 'authenticated', role: 'authenticated', is_anonymous: true, app_metadata: {}, user_metadata: { full_name: 'UX Admin' }, created_at: new Date().toISOString() } })
     if (url.pathname === '/rest/v1/rpc/login_with_shared_admin_password') { admin = true; return respond(route, { ok: true, profile: { id: userId, full_name: 'UX Admin', role: 'admin' } }) }
@@ -143,6 +144,8 @@ test('trial attendance is tagged and excluded from counted report sessions', asy
   await expect(attendanceSummary).toContainText('2')
   await expect(attendanceSummary).toContainText('Regular 1')
   await expect(attendanceSummary).toContainText('Trial 1')
+  const enrolledCard = page.locator('.attendance-student-card').filter({ hasText: 'Avery Basketball Student' })
+  await expect(enrolledCard.getByRole('button', { name: /trial/i })).toHaveCount(0)
   const trialCard = page.locator('.attendance-student-card').filter({ hasText: 'Blake Trial' })
   const trialToggle = trialCard.getByRole('button', { name: 'Remove trial tag from Blake Trial' })
   await expect(trialToggle).toHaveAttribute('aria-pressed', 'true')
@@ -159,6 +162,28 @@ test('trial attendance is tagged and excluded from counted report sessions', asy
   await expect(page.getByText('Trial', { exact: true }).last()).toBeVisible()
 })
 
+test('student photo lightbox stays contained on phone screens', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile photo lightbox behavior')
+  await loginAdmin(page)
+  await navigate(page, true, 'Attendance', 'Attendance')
+  await page.getByRole('button', { name: /Elite Development Training/ }).first().click()
+  await page.getByRole('button', { name: /View photo of Avery Basketball Student/ }).click()
+  await expect(page.getByText('Avery Basketball Student With A Long Name', { exact: true }).last()).toBeVisible()
+  const bounds = await page.locator('.photo-lightbox-content').evaluate((content) => {
+    const contentRect = content.getBoundingClientRect()
+    const imageRect = content.querySelector('img')!.getBoundingClientRect()
+    return { top: contentRect.top, right: contentRect.right, bottom: contentRect.bottom, left: contentRect.left, imageTop: imageRect.top, imageRight: imageRect.right, imageBottom: imageRect.bottom, imageLeft: imageRect.left, viewportWidth: visualViewport?.width || innerWidth, viewportHeight: visualViewport?.height || innerHeight }
+  })
+  expect(bounds.top).toBeGreaterThanOrEqual(0)
+  expect(bounds.left).toBeGreaterThanOrEqual(0)
+  expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth)
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight)
+  expect(bounds.imageTop).toBeGreaterThanOrEqual(bounds.top)
+  expect(bounds.imageLeft).toBeGreaterThanOrEqual(bounds.left)
+  expect(bounds.imageRight).toBeLessThanOrEqual(bounds.right)
+  expect(bounds.imageBottom).toBeLessThanOrEqual(bounds.bottom)
+})
+
 test('reports can be filtered by student name', async ({ page, isMobile }) => {
   await loginAdmin(page)
   await navigate(page, Boolean(isMobile), 'Reports', 'Reports')
@@ -173,6 +198,39 @@ test('reports can be filtered by student name', async ({ page, isMobile }) => {
   await page.getByRole('option', { name: 'Skills Lab' }).click()
   await expect(page.getByRole('button', { name: /Avery Basketball Student/ }).locator('.report-total')).toHaveText('1')
   await expect(page.getByRole('button', { name: /Blake Trial/ })).toHaveCount(0)
+})
+
+test('receipt images are compressed before OCR upload', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile && browserName !== 'webkit', 'Receipt compression runs in Chromium and mobile WebKit')
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Payments', 'Payments')
+  await page.getByRole('button', { name: 'Record payment' }).click()
+  const dataUrl = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1200
+    canvas.height = 1200
+    const context = canvas.getContext('2d')!
+    const image = context.createImageData(canvas.width, canvas.height)
+    let state = 123456789
+    for (let index = 0; index < image.data.length; index += 4) {
+      state = (state * 1664525 + 1013904223) >>> 0
+      image.data[index] = state & 255
+      image.data[index + 1] = (state >>> 8) & 255
+      image.data[index + 2] = (state >>> 16) & 255
+      image.data[index + 3] = (state >>> 24) & 255
+    }
+    context.putImageData(image, 0, 0)
+    return canvas.toDataURL('image/png')
+  })
+  const source = Buffer.from(dataUrl.split(',')[1], 'base64')
+  const requestPromise = page.waitForRequest((request) => request.url().includes('/functions/v1/receipt-ocr'))
+  await page.locator('input[type="file"]').setInputFiles({ name: 'large-receipt.png', mimeType: 'image/png', buffer: source })
+  const request = await requestPromise
+  const uploaded = request.postDataBuffer()!
+  const contentStart = uploaded.indexOf(Buffer.from('\r\n\r\n')) + 4
+  const contentEnd = uploaded.lastIndexOf(Buffer.from('\r\n--'))
+  expect(uploaded.includes(Buffer.from('image/webp'))).toBe(true)
+  expect(contentEnd - contentStart).toBeLessThanOrEqual(400_000)
 })
 
 test('reports combine attendance from multiple selected months', async ({ page, isMobile }) => {

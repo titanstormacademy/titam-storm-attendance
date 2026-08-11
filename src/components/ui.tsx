@@ -75,7 +75,7 @@ function profileThumbnailUrl(src?: string | null) {
 }
 
 export function PhotoLightbox({ src, name, opened, onClose }: { src: string | null; name: string; opened: boolean; onClose: () => void }) {
-  return <Modal className="photo-lightbox" opened={opened} onClose={onClose} title={name} size="xl" centered overlayProps={{ backgroundOpacity: 0.82, blur: 5 }}><Box className="photo-lightbox-stage">{src ? <Image src={src} alt={name} fit="contain" /> : <Avatar name={name} color="orange" size={180} radius="xl" />}</Box></Modal>
+  return <Modal className="photo-lightbox" classNames={{ inner: 'photo-lightbox-inner', content: 'photo-lightbox-content', body: 'photo-lightbox-body' }} opened={opened} onClose={onClose} title={name} size="xl" centered overlayProps={{ backgroundOpacity: 0.82, blur: 5 }} transitionProps={{ transition: 'fade', duration: 0 }}><Box className="photo-lightbox-stage">{src ? <Image src={src} alt={name} fit="contain" /> : <Avatar name={name} color="orange" size={180} radius="xl" />}</Box></Modal>
 }
 
 export function PageLoader({ label = 'Loading workspace…' }: { label?: string }) {
