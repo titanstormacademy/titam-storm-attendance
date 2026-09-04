@@ -11,6 +11,8 @@ import { EmptyState, PageHeader, PageLoader, PersonAvatar, PhotoLightbox } from 
 import { useNavigationGuard } from '../contexts/useNavigationGuard'
 import type { AcademyClass, Attendance, BootstrapData, CoachAttendance, Session, Student } from '../types/models'
 
+const studentLevels = ['Beginner', 'Intermediate', 'Advanced'] as const
+
 export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId: number; data: BootstrapData; isAdmin: boolean; onRegisterStudent: () => void }) {
   const initialRoute = attendanceRoute()
   const [screen, setScreen] = useState<'hub' | 'detail'>(initialRoute.classId ? 'detail' : 'hub')
@@ -65,6 +67,12 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
   const present = records.filter((record) => record.status === 'Present')
   const trialCount = present.filter((record) => record.is_trial && !effectiveEnrollmentIds.has(record.student_id)).length
   const countedAttendance = present.length - trialCount
+  const presentByLevel = present.reduce<Record<string, number>>((counts, record) => {
+    const studentLevel = data.students.find((student) => student.id === record.student_id)?.level || 'Other'
+    counts[studentLevel] = (counts[studentLevel] || 0) + 1
+    return counts
+  }, {})
+  const presentLevels = [...studentLevels, ...(presentByLevel.Other ? ['Other'] : [])]
   const notMarked = allEnrolled.filter((student) => !records.some((record) => record.student_id === student.id && record.status === 'Present')).length
   const groupedStudents = useMemo(() => {
     const groups = new Map<string, Student[]>()
@@ -340,7 +348,7 @@ export function AttendancePage({ data, isAdmin, onRegisterStudent }: { branchId:
 
       {loading ? <PageLoader label="Loading attendance…" /> : loadError ? <Alert color="red" title="Could not load attendance">{loadError}<Button mt="md" size="xs" onClick={() => setReloadRequest((current) => current + 1)}>Retry</Button></Alert> : session ? <Stack gap="md">
         <SimpleGrid cols={2} spacing="sm" className="attendance-summary-grid">
-          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{present.length}</Text><Text size="xs" c="dimmed">Total present</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">Regular <b>{countedAttendance}</b></Text><Text size="xs" c="orange">Trial <b>{trialCount}</b></Text></Group></Paper>
+          <Paper className="attendance-summary-card present" p="lg" radius="lg"><Text className="attendance-summary-value">{present.length}</Text><Text size="xs" c="dimmed">Total present</Text><Group justify="center" gap="xs" mt="xs"><Text size="xs">Regular <b>{countedAttendance}</b></Text><Text size="xs" c="orange">Trial <b>{trialCount}</b></Text></Group><Group aria-label="Present students by level" justify="center" gap={6} mt="xs">{presentLevels.map((studentLevel) => <Badge key={studentLevel} size="sm" color="green" variant="light">{studentLevel} {presentByLevel[studentLevel] || 0}</Badge>)}</Group></Paper>
           <Paper className="attendance-summary-card" p="lg" radius="lg"><Text className="attendance-summary-value">{notMarked}</Text><Text size="xs" c="dimmed">Not marked</Text></Paper>
         </SimpleGrid>
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Badge, Box, Button, Grid, Group, MultiSelect, Paper, SegmentedControl, Select, Stack, Table, Text, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCheck, IconChevronDown, IconClipboard, IconSearch } from '@tabler/icons-react'
+import { IconCheck, IconChevronDown, IconClipboard, IconFileSpreadsheet, IconSearch } from '@tabler/icons-react'
 import { getAttendanceReport } from '../lib/api'
 import { PageHeader, PageLoader } from '../components/ui'
 import type { AcademyClass, Attendance, BootstrapData, Student } from '../types/models'
@@ -124,8 +124,33 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
     }
   }
 
+  function exportGridReport() {
+    const selectedClass = selectedClassId == null ? 'All classes' : data.classes.find((item) => item.id === selectedClassId)?.label || 'Selected class'
+    const metadata: Array<[string, string]> = [['Period', period.label], ['Class', selectedClass]]
+    if (search.trim()) metadata.push(['Student filter', search.trim()])
+    const heading = ['Student', 'Counted', 'Trials', ...dates.map((date) => dayjs(date).format('D MMM YYYY'))]
+    const body = filteredRows.map((row) => [
+      `${row.name}${row.age == null ? '' : ` (${row.age})`}`,
+      row.total,
+      row.trialCount,
+      ...dates.map((date) => (row.dates.get(date) || []).map((item) => `${item.trial ? 'T' : '✓'} ${item.className}${item.walkIn ? ' (walk-in)' : ''}`).join('; ')),
+    ])
+    const workbook = excelWorkbook(`${period.label} Attendance Grid`, metadata, heading, body)
+    const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `attendance-grid-${year}-${period.months.join('-')}.xls`
+    document.body.append(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    notifications.show({ color: 'green', message: `${period.label} attendance grid exported` })
+  }
+
+  const actionsDisabled = loading || Boolean(loadError) || filteredRows.length === 0
+
   return <>
-    <PageHeader title="Reports" description="Student attendance overview" action={<Button variant="light" leftSection={<IconClipboard size={17} />} onClick={copyReport} disabled={loading || Boolean(loadError) || filteredRows.length === 0}>Copy</Button>} />
+    <PageHeader title="Reports" description="Student attendance overview" action={<Group gap="xs"><Button variant="light" leftSection={<IconClipboard size={17} />} onClick={copyReport} disabled={actionsDisabled}>Copy</Button>{view === 'grid' && <Button aria-label="Export grid to Excel" leftSection={<IconFileSpreadsheet size={17} />} onClick={exportGridReport} disabled={actionsDisabled}>Excel</Button>}</Group>} />
     <SegmentedControl value={view} onChange={(value) => { const nextView = value as 'summary' | 'grid'; setView(nextView); if (nextView === 'grid' && months.includes('All')) setMonths([dayjs().format('MM')]) }} data={[{ value: 'summary', label: 'Summary' }, { value: 'grid', label: 'Grid' }]} mb="md" />
     <Paper p="md" radius="lg" withBorder mb="md"><Grid gutter="sm" align="flex-end"><Grid.Col span={{ base: 12, md: 6 }}><TextInput label="Student" aria-label="Search report students" leftSection={<IconSearch size={17} />} placeholder="Search by student name…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /></Grid.Col><Grid.Col span={{ base: 12, xs: 6, md: 2 }}><Select label="Class" aria-label="Filter report students by class" value={classFilter} onChange={setClassFilter} data={[{ value: 'All', label: 'All classes' }, ...data.classes.map((item) => ({ value: String(item.id), label: item.label }))]} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><Select label="Year" value={year} onChange={(value) => setYear(value || dayjs().format('YYYY'))} data={years} allowDeselect={false} /></Grid.Col><Grid.Col span={{ base: 6, md: 2 }}><MultiSelect label="Months" aria-label="Filter report by months" value={months} onChange={changeMonths} data={monthOptions} hidePickedOptions searchable /></Grid.Col></Grid></Paper>
     {!loading && !loadError && rows.length > 0 && <Text size="xs" c="dimmed" mb="xs" px={4}>{filteredRows.length === rows.length ? `${rows.length} students` : `${filteredRows.length} of ${rows.length} students`}</Text>}
@@ -142,4 +167,31 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
 
 function DividerLine() {
   return <Box my="md" style={{ borderTop: '1px solid #e5e8ee' }} />
+}
+
+function excelWorkbook(title: string, metadata: Array<[string, string]>, heading: string[], body: Array<Array<string | number>>) {
+  const headerRow = metadata.length + 3
+  const rows = [
+    `<Row ss:Height="24"><Cell ss:StyleID="Title" ss:MergeAcross="${heading.length - 1}"><Data ss:Type="String">${xmlText(title)}</Data></Cell></Row>`,
+    ...metadata.map(([label, value]) => `<Row><Cell ss:StyleID="MetaLabel"><Data ss:Type="String">${xmlText(label)}</Data></Cell><Cell ss:MergeAcross="${heading.length - 2}"><Data ss:Type="String">${xmlText(value)}</Data></Cell></Row>`),
+    '<Row/>',
+    `<Row>${heading.map((value) => excelCell(value, 'Header')).join('')}</Row>`,
+    ...body.map((values) => `<Row>${values.map((value, index) => excelCell(value, index === 1 || index === 2 ? 'Number' : undefined)).join('')}</Row>`),
+  ]
+  const dateColumns = Array.from({ length: Math.max(0, heading.length - 3) }, () => '<Column ss:Width="110"/>').join('')
+  const filter = body.length ? `<AutoFilter x:Range="R${headerRow}C1:R${headerRow + body.length}C${heading.length}" xmlns="urn:schemas-microsoft-com:office:excel"/>` : ''
+  return `\uFEFF<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="11"/></Style><Style ss:ID="Title"><Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1"/></Style><Style ss:ID="MetaLabel"><Font ss:Bold="1"/></Style><Style ss:ID="Header"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/></Style><Style ss:ID="Number"><Alignment ss:Horizontal="Center"/></Style></Styles><Worksheet ss:Name="Attendance Grid"><Table><Column ss:Width="220"/><Column ss:Width="65"/><Column ss:Width="65"/>${dateColumns}${rows.join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>${headerRow}</SplitHorizontal><TopRowBottomPane>${headerRow}</TopRowBottomPane></WorksheetOptions>${filter}</Worksheet></Workbook>`
+}
+
+function excelCell(value: string | number, style?: string) {
+  const type = typeof value === 'number' ? 'Number' : 'String'
+  return `<Cell${style ? ` ss:StyleID="${style}"` : ''}><Data ss:Type="${type}">${xmlText(String(value))}</Data></Cell>`
+}
+
+function xmlText(value: string) {
+  const valid = [...value].filter((character) => {
+    const code = character.codePointAt(0)!
+    return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 0xD7FF) || (code >= 0xE000 && code <= 0xFFFD) || (code >= 0x10000 && code <= 0x10FFFF)
+  }).join('')
+  return valid.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }

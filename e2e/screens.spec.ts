@@ -144,6 +144,11 @@ test('trial attendance is tagged and excluded from counted report sessions', asy
   await expect(attendanceSummary).toContainText('2')
   await expect(attendanceSummary).toContainText('Regular 1')
   await expect(attendanceSummary).toContainText('Trial 1')
+  const levelBreakdown = attendanceSummary.getByLabel('Present students by level')
+  await expect(levelBreakdown).toContainText('Beginner 1')
+  await expect(levelBreakdown).toContainText('Intermediate 1')
+  await expect(levelBreakdown).toContainText('Advanced 0')
+  await expectNoHorizontalOverflow(page)
   const enrolledCard = page.locator('.attendance-student-card').filter({ hasText: 'Avery Basketball Student' })
   await expect(enrolledCard.getByRole('button', { name: /trial/i })).toHaveCount(0)
   const trialCard = page.locator('.attendance-student-card').filter({ hasText: 'Blake Trial' })
@@ -198,6 +203,27 @@ test('reports can be filtered by student name', async ({ page, isMobile }) => {
   await page.getByRole('option', { name: 'Skills Lab' }).click()
   await expect(page.getByRole('button', { name: /Avery Basketball Student/ }).locator('.report-total')).toHaveText('1')
   await expect(page.getByRole('button', { name: /Blake Trial/ })).toHaveCount(0)
+})
+
+test('filtered attendance grid can be exported to Excel', async ({ page, isMobile }) => {
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Reports', 'Reports')
+  await page.getByLabel('Search report students').fill('blake')
+  await page.getByText('Grid', { exact: true }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export grid to Excel' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^attendance-grid-\d{4}-\d{2}\.xls$/)
+  const stream = await download.createReadStream()
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  const workbook = Buffer.concat(chunks).toString('utf8')
+  expect(await page.evaluate((xml) => new DOMParser().parseFromString(xml, 'application/xml').querySelectorAll('parsererror').length, workbook)).toBe(0)
+  expect(workbook).toContain('Blake Trial')
+  expect(workbook).not.toContain('Avery Basketball Student')
+  expect(workbook).toContain('Student filter')
+  expect(workbook).toContain('Trial')
+  await expectNoHorizontalOverflow(page)
 })
 
 test('receipt images are compressed before OCR upload', async ({ page, isMobile, browserName }) => {
