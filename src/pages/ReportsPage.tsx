@@ -8,6 +8,8 @@ import { PageHeader, PageLoader } from '../components/ui'
 import type { AcademyClass, Attendance, BootstrapData, Student } from '../types/models'
 
 type ReportRecord = Attendance & { student: Pick<Student, 'id' | 'name' | 'status' | 'gender' | 'level'>; class: Pick<AcademyClass, 'id' | 'label'> }
+type ExcelValue = string | number | { value: string; style: string }
+type ReportDateEntry = { classId: number; className: string; walkIn: boolean; trial: boolean }
 type ReportRow = {
   id: number
   name: string
@@ -17,7 +19,7 @@ type ReportRow = {
   trialCount: number
   enrolledClasses: Array<{ id: number; label: string }>
   classes: Map<number, { label: string; dates: Array<{ date: string; trial: boolean }>; walkIns: number; trials: number }>
-  dates: Map<string, Array<{ classId: number; className: string; walkIn: boolean; trial: boolean }>>
+  dates: Map<string, ReportDateEntry[]>
 }
 
 const classColors = ['#ef3340', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b']
@@ -126,14 +128,19 @@ export function ReportsPage({ branchId, data }: { branchId: number; data: Bootst
 
   function exportGridReport() {
     const selectedClass = selectedClassId == null ? 'All classes' : data.classes.find((item) => item.id === selectedClassId)?.label || 'Selected class'
-    const metadata: Array<[string, string]> = [['Period', period.label], ['Class', selectedClass]]
+    const classCodes = new Map(classesInReport.map(([id], index) => [id, index + 1]))
+    const metadata: Array<[string, string]> = [
+      ['Period', period.label],
+      ['Class', selectedClass],
+      ['Legend', `✓ Present · T Trial · * Walk-in${classesInReport.length ? ` · ${classesInReport.map(([id, label]) => `${classCodes.get(id)} ${label}`).join(' · ')}` : ''}`],
+    ]
     if (search.trim()) metadata.push(['Student filter', search.trim()])
-    const heading = ['Student', 'Counted', 'Trials', ...dates.map((date) => dayjs(date).format('D MMM YYYY'))]
-    const body = filteredRows.map((row) => [
+    const heading = ['Student', 'Counted', 'Trials', ...dates.map((date) => dayjs(date).format('D MMM\nYYYY'))]
+    const body: ExcelValue[][] = filteredRows.map((row) => [
       `${row.name}${row.age == null ? '' : ` (${row.age})`}`,
       row.total,
       row.trialCount,
-      ...dates.map((date) => (row.dates.get(date) || []).map((item) => `${item.trial ? 'T' : '✓'} ${item.className}${item.walkIn ? ' (walk-in)' : ''}`).join('; ')),
+      ...dates.map((date) => attendanceExcelCell(row.dates.get(date) || [], classCodes)),
     ])
     const workbook = excelWorkbook(`${period.label} Attendance Grid`, metadata, heading, body)
     const url = URL.createObjectURL(new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8' }))
@@ -169,23 +176,31 @@ function DividerLine() {
   return <Box my="md" style={{ borderTop: '1px solid #e5e8ee' }} />
 }
 
-function excelWorkbook(title: string, metadata: Array<[string, string]>, heading: string[], body: Array<Array<string | number>>) {
+function attendanceExcelCell(entries: ReportDateEntry[], classCodes: Map<number, number>): ExcelValue {
+  if (!entries.length) return ''
+  const value = entries.map((item) => `${item.trial ? 'T' : '✓'}${classCodes.get(item.classId) || ''}${item.walkIn ? '*' : ''}`).join(' ')
+  const styles = new Set(entries.map((item) => item.trial ? 'TrialMark' : item.walkIn ? 'WalkInMark' : 'PresentMark'))
+  return { value, style: styles.size === 1 ? [...styles][0] : 'MixedMark' }
+}
+
+function excelWorkbook(title: string, metadata: Array<[string, string]>, heading: string[], body: ExcelValue[][]) {
   const headerRow = metadata.length + 3
   const rows = [
     `<Row ss:Height="24"><Cell ss:StyleID="Title" ss:MergeAcross="${heading.length - 1}"><Data ss:Type="String">${xmlText(title)}</Data></Cell></Row>`,
     ...metadata.map(([label, value]) => `<Row><Cell ss:StyleID="MetaLabel"><Data ss:Type="String">${xmlText(label)}</Data></Cell><Cell ss:MergeAcross="${heading.length - 2}"><Data ss:Type="String">${xmlText(value)}</Data></Cell></Row>`),
     '<Row/>',
-    `<Row>${heading.map((value) => excelCell(value, 'Header')).join('')}</Row>`,
-    ...body.map((values) => `<Row>${values.map((value, index) => excelCell(value, index === 1 || index === 2 ? 'Number' : undefined)).join('')}</Row>`),
+    `<Row ss:Height="32">${heading.map((value) => excelCell(value, 'Header')).join('')}</Row>`,
+    ...body.map((values) => `<Row ss:AutoFitHeight="0" ss:Height="22">${values.map((value, index) => excelCell(value, index === 0 ? 'Body' : index < 3 ? 'Number' : 'Attendance')).join('')}</Row>`),
   ]
-  const dateColumns = Array.from({ length: Math.max(0, heading.length - 3) }, () => '<Column ss:Width="110"/>').join('')
+  const dateColumns = Array.from({ length: Math.max(0, heading.length - 3) }, () => '<Column ss:Width="62"/>').join('')
   const filter = body.length ? `<AutoFilter x:Range="R${headerRow}C1:R${headerRow + body.length}C${heading.length}" xmlns="urn:schemas-microsoft-com:office:excel"/>` : ''
-  return `\uFEFF<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="11"/></Style><Style ss:ID="Title"><Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1"/></Style><Style ss:ID="MetaLabel"><Font ss:Bold="1"/></Style><Style ss:ID="Header"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/></Style><Style ss:ID="Number"><Alignment ss:Horizontal="Center"/></Style></Styles><Worksheet ss:Name="Attendance Grid"><Table><Column ss:Width="220"/><Column ss:Width="65"/><Column ss:Width="65"/>${dateColumns}${rows.join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>${headerRow}</SplitHorizontal><TopRowBottomPane>${headerRow}</TopRowBottomPane></WorksheetOptions>${filter}</Worksheet></Workbook>`
+  return `\uFEFF<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11"/></Style><Style ss:ID="Title"><Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1"/></Style><Style ss:ID="MetaLabel"><Font ss:Bold="1"/></Style><Style ss:ID="Header"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D9E2F3"/></Borders><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/></Style><Style ss:ID="Body"><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D9E2F3"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D9E2F3"/></Borders></Style><Style ss:ID="Number" ss:Parent="Body"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="Attendance" ss:Parent="Body"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style><Style ss:ID="PresentMark" ss:Parent="Attendance"><Font ss:Bold="1" ss:Color="#15803D"/><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/></Style><Style ss:ID="WalkInMark" ss:Parent="Attendance"><Font ss:Bold="1" ss:Color="#1D4ED8"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/></Style><Style ss:ID="TrialMark" ss:Parent="Attendance"><Font ss:Bold="1" ss:Color="#C2410C"/><Interior ss:Color="#FFEDD5" ss:Pattern="Solid"/></Style><Style ss:ID="MixedMark" ss:Parent="Attendance"><Font ss:Bold="1" ss:Color="#6D28D9"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/></Style></Styles><Worksheet ss:Name="Attendance Grid"><Table ss:DefaultRowHeight="22"><Column ss:Width="190"/><Column ss:Width="58"/><Column ss:Width="50"/>${dateColumns}${rows.join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>${headerRow}</SplitHorizontal><TopRowBottomPane>${headerRow}</TopRowBottomPane><SplitVertical>3</SplitVertical><LeftColumnRightPane>3</LeftColumnRightPane><ActivePane>0</ActivePane></WorksheetOptions>${filter}</Worksheet></Workbook>`
 }
 
-function excelCell(value: string | number, style?: string) {
-  const type = typeof value === 'number' ? 'Number' : 'String'
-  return `<Cell${style ? ` ss:StyleID="${style}"` : ''}><Data ss:Type="${type}">${xmlText(String(value))}</Data></Cell>`
+function excelCell(input: ExcelValue, fallbackStyle?: string) {
+  const cell = typeof input === 'object' ? input : { value: input, style: fallbackStyle }
+  const type = typeof cell.value === 'number' ? 'Number' : 'String'
+  return `<Cell${cell.style ? ` ss:StyleID="${cell.style}"` : ''}><Data ss:Type="${type}">${xmlText(String(cell.value))}</Data></Cell>`
 }
 
 function xmlText(value: string) {

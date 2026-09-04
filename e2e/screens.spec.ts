@@ -222,7 +222,11 @@ test('filtered attendance grid can be exported to Excel', async ({ page, isMobil
   expect(workbook).toContain('Blake Trial')
   expect(workbook).not.toContain('Avery Basketball Student')
   expect(workbook).toContain('Student filter')
-  expect(workbook).toContain('Trial')
+  expect(workbook).toContain('✓ Present · T Trial · * Walk-in')
+  expect(workbook).toContain('<Data ss:Type="String">T1*</Data>')
+  expect(workbook).toContain('ss:StyleID="TrialMark"')
+  expect(workbook).toContain('<Column ss:Width="62"/>')
+  expect(workbook).toContain('<SplitVertical>3</SplitVertical>')
   await expectNoHorizontalOverflow(page)
 })
 
