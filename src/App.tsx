@@ -29,6 +29,8 @@ interface NavItem {
   admin?: boolean
 }
 
+const lastLocationStorageKey = 'titan-storm-last-location'
+
 const navigation: NavItem[] = [
   { key: 'dashboard', label: 'Overview', icon: IconChartBar },
   { key: 'attendance', label: 'Attendance', icon: IconClipboardCheck },
@@ -45,7 +47,7 @@ export default function App() {
   const { setColorScheme } = useMantineColorScheme()
   const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true })
   const { confirmLeave } = useNavigationGuardContext()
-  const [page, setPage] = useState<PageKey>(() => pageFromHistory())
+  const [page, setPage] = useState<PageKey>(() => restoreLastLocation())
   const pageRef = useRef(page)
   const locationRef = useRef(currentUrl())
   const scrollRestoreRef = useRef<(() => void) | null>(null)
@@ -74,6 +76,7 @@ export default function App() {
 
   useEffect(() => {
     pageRef.current = page
+    rememberLastLocation()
     requestAnimationFrame(() => document.querySelector<HTMLElement>('.page-header h1')?.focus({ preventScroll: true }))
   }, [page])
 
@@ -94,7 +97,10 @@ export default function App() {
   }, [branchId])
 
   useEffect(() => {
-    const handleLocationChange = (event: Event) => { locationRef.current = (event as CustomEvent<string>).detail }
+    const handleLocationChange = (event: Event) => {
+      locationRef.current = (event as CustomEvent<string>).detail
+      rememberLastLocation(locationRef.current)
+    }
     const handlePopState = () => {
       const previousUrl = locationRef.current
       const nextPage = pageFromHistory()
@@ -105,6 +111,7 @@ export default function App() {
       if (navbarOpened && !window.history.state?.mobileNav) navbar.close()
       if (!pageChanged && !branchChanged) {
         locationRef.current = currentUrl()
+        rememberLastLocation(locationRef.current)
         const scrollY = historyScrollPosition()
         if (scrollY != null) startScrollRestoration(scrollY)
         return
@@ -116,6 +123,7 @@ export default function App() {
       }
       stopScrollRestoration()
       locationRef.current = currentUrl()
+      rememberLastLocation(locationRef.current)
       if (branchChanged) {
         setBranchId(nextBranchId)
         localStorage.setItem('titan-storm-branch', String(nextBranchId))
@@ -368,9 +376,33 @@ function ConfigurationRequired() {
   return <Center h="100vh" p="xl"><Paper p={36} radius="xl" withBorder maw={620}><ThemeIcon size={56} radius="lg" color="orange"><IconBallBasketball size={31} /></ThemeIcon><Title order={2} mt="xl">Connect Supabase to continue</Title><Text c="dimmed" mt="sm">Create <Text span ff="monospace">titan-storm-web/.env.local</Text> and add your project URL and publishable key.</Text><Alert mt="xl" icon={<IconAlertCircle size={18} />} color="orange"><Text ff="monospace" size="sm">VITE_SUPABASE_URL=https://your-project.supabase.co<br />VITE_SUPABASE_ANON_KEY=your-publishable-key</Text></Alert></Paper></Center>
 }
 
+function restoreLastLocation(): PageKey {
+  const currentPage = pageFromHistory()
+  if (new URLSearchParams(window.location.search).has('page')) return currentPage
+  try {
+    const stored = localStorage.getItem(lastLocationStorageKey)
+    if (!stored) return currentPage
+    const url = new URL(stored, window.location.origin)
+    if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) return currentPage
+    const storedPage = pageFromUrl(url)
+    window.history.replaceState({ ...window.history.state, titanPage: storedPage }, '', `${url.pathname}${url.search}${url.hash}`)
+    return storedPage
+  } catch {
+    return currentPage
+  }
+}
+
 function pageFromHistory(): PageKey {
-  const value = new URLSearchParams(window.location.search).get('page')
+  return pageFromUrl(new URL(window.location.href))
+}
+
+function pageFromUrl(url: URL): PageKey {
+  const value = url.searchParams.get('page')
   return navigation.some((item) => item.key === value) ? value as PageKey : 'dashboard'
+}
+
+function rememberLastLocation(url = currentUrl()) {
+  try { localStorage.setItem(lastLocationStorageKey, url) } catch {}
 }
 
 function currentUrl() {

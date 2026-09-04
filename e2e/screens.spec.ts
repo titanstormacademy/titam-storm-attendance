@@ -167,6 +167,16 @@ test('trial attendance is tagged and excluded from counted report sessions', asy
   await expect(page.getByText('Trial', { exact: true }).last()).toBeVisible()
 })
 
+test('reopening restores the active attendance detail', async ({ page, isMobile }) => {
+  await loginAdmin(page)
+  await navigate(page, Boolean(isMobile), 'Attendance', 'Attendance')
+  await page.getByRole('button', { name: /Elite Development Training/ }).first().click()
+  await expect(page).toHaveURL(/attendanceClass=401/)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Elite Development Training With Long Name' })).toBeVisible()
+  await expect(page).toHaveURL(/attendanceClass=401/)
+})
+
 test('student photo lightbox stays contained on phone screens', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Mobile photo lightbox behavior')
   await loginAdmin(page)

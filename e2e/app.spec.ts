@@ -94,6 +94,16 @@ test('account dark mode persists and keeps student profiles dark', async ({ page
   await expect(page.locator('html')).toHaveAttribute('data-mantine-color-scheme', 'dark')
 })
 
+test('reopening the app restores the last page', async ({ page, isMobile }) => {
+  await login(page)
+  const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
+  await navigation.getByText('Students', { exact: true }).click()
+  await expect(page).toHaveURL(/page=students/)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Students' })).toBeVisible()
+  await expect(page).toHaveURL(/page=students/)
+})
+
 test('browser Back returns through top-level app navigation', async ({ page, isMobile }) => {
   await login(page)
   const navigation = page.getByRole('navigation', { name: isMobile ? 'Primary navigation' : 'Full navigation' })
